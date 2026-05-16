@@ -117,10 +117,16 @@
       }
 
       .app-version {
-        margin-left: 8px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: var(--text-muted);
+        display: inline-block;
+        margin-left: 10px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--primary);
+        background: var(--primary-soft);
+        border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+        vertical-align: middle;
       }
 
       .theme-toggle {
@@ -1285,7 +1291,7 @@
   <body>
     <header class="app-header">
       <div class="app-header-inner">
-        <h1>Caisse <span class="app-version" id="appVersion"></span></h1>
+        <h1>Caisse <span class="app-version" id="appVersion" aria-label="Version"></span></h1>
         <div class="header-actions">
           <button
             type="button"

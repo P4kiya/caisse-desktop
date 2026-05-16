@@ -2,6 +2,13 @@ const path = require('path');
 const { contextBridge, ipcRenderer } = require('electron');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+let bundledVersion = '';
+try {
+  bundledVersion = require('./package.json').version || '';
+} catch (_) {
+  bundledVersion = '';
+}
+
 const apiBaseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace(
   /\/$/,
   '',
@@ -36,6 +43,10 @@ UPDATE_CHANNELS.forEach((channel) => {
 
 contextBridge.exposeInMainWorld('caisseConfig', {
   apiBaseUrl,
+});
+
+contextBridge.exposeInMainWorld('caisseApp', {
+  version: bundledVersion,
 });
 
 contextBridge.exposeInMainWorld('caisseUpdater', {

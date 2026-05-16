@@ -1,6 +1,5 @@
 (function initUpdateUi() {
   const updater = window.caisseUpdater;
-  if (!updater) return;
 
   const modal = document.getElementById('updateModal');
   const messageEl = document.getElementById('updateMessage');
@@ -19,9 +18,10 @@
   const appVersionEl = document.getElementById('appVersion');
   const backdrop = modal?.querySelector('.update-backdrop');
 
-  if (!modal) return;
+  let currentVersion = window.caisseApp?.version || '';
 
-  let currentVersion = '';
+  if (!updater) return;
+  if (!modal) return;
   let infoCloseHandler = null;
 
   function openModal() {
@@ -251,8 +251,11 @@
       console.error('Failed to read app version:', error);
     }
 
-    if (appVersionEl) {
-      appVersionEl.textContent = currentVersion ? `v${currentVersion}` : '';
+    if (appVersionEl && currentVersion) {
+      appVersionEl.textContent = currentVersion.startsWith('v')
+        ? currentVersion
+        : `v${currentVersion}`;
+      appVersionEl.hidden = false;
     }
 
     updater.onStatus(handleUpdateStatus);

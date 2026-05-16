@@ -882,6 +882,34 @@ themeToggle?.addEventListener('click', toggleTheme);
 window.caisseShowToast = showToast;
 window.caisseSetStatus = setStatus;
 
+function formatAppVersionLabel(version) {
+  const value = String(version || '').trim();
+  return value ? `v${value.replace(/^v/i, '')}` : '';
+}
+
+function setAppVersionLabel(version) {
+  const appVersionEl = document.getElementById('appVersion');
+  if (!appVersionEl) return;
+  const label = formatAppVersionLabel(version);
+  appVersionEl.textContent = label;
+  appVersionEl.hidden = !label;
+}
+
+async function initAppVersion() {
+  setAppVersionLabel(window.caisseApp?.version);
+
+  if (!window.caisseUpdater?.getVersion) return;
+
+  try {
+    const version = await window.caisseUpdater.getVersion();
+    setAppVersionLabel(version);
+  } catch (error) {
+    console.warn('Could not read app version from main process:', error);
+  }
+}
+
+initAppVersion();
+
 initNumpad();
 updateThemeToggleUi(getTheme());
 updatePeriodUi();

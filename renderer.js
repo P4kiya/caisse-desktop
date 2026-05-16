@@ -58,9 +58,7 @@ let numpadTarget = priceInput;
 
 const TOAST_DURATION_MS = 4200;
 const THEME_STORAGE_KEY = 'caisse-theme';
-const NUMPAD_STORAGE_KEY = 'caisse-numpad-open';
-
-let numpadOpen = false;
+let numpadOpen = true;
 let quantityReplaceOnNextInput = false;
 
 function setStatus(message, type = '') {
@@ -250,17 +248,9 @@ function updateNumpadToggleUi() {
   numpadToggle.title = numpadOpen ? 'Masquer le pavé' : 'Pavé numérique';
 }
 
-function setNumpadOpen(open, { persist = true } = {}) {
+function setNumpadOpen(open) {
   numpadOpen = Boolean(open);
   updateNumpadToggleUi();
-
-  if (persist) {
-    try {
-      localStorage.setItem(NUMPAD_STORAGE_KEY, numpadOpen ? '1' : '0');
-    } catch (_) {
-      /* ignore */
-    }
-  }
 
   if (!numpadPanel) return;
 
@@ -299,16 +289,6 @@ function toggleNumpad() {
         ? document.activeElement
         : priceInput;
     setNumpadTarget(active);
-  }
-}
-
-function loadNumpadPreference() {
-  try {
-    const stored = localStorage.getItem(NUMPAD_STORAGE_KEY);
-    if (stored === null) return true;
-    return stored === '1';
-  } catch (_) {
-    return true;
   }
 }
 
@@ -382,7 +362,12 @@ function initNumpad() {
   numpadToggle?.addEventListener('click', toggleNumpad);
   numpadClose?.addEventListener('click', () => setNumpadOpen(false));
 
-  setNumpadOpen(loadNumpadPreference(), { persist: false });
+  try {
+    localStorage.removeItem('caisse-numpad-open');
+  } catch (_) {
+    /* ignore */
+  }
+  setNumpadOpen(true);
 
   numpadEl.addEventListener('click', (event) => {
     const digitBtn = event.target.closest('[data-digit]');

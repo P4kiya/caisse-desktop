@@ -7,16 +7,14 @@
   const progressFill = document.getElementById('updateBannerProgressFill');
   const progressText = document.getElementById('updateBannerProgressText');
   const actionsEl = document.getElementById('updateBannerActions');
-  const applyBtn = document.getElementById('updateApplyBtn');
-  const laterBtn = document.getElementById('updateLaterBtn');
   const appVersionEl = document.getElementById('appVersion');
 
   if (!updater || !banner) return;
 
   let currentVersion = window.caisseApp?.version || '';
-  let updateDismissed = false;
   let updateInProgress = false;
-  let pendingPayload = null;
+
+  if (actionsEl) actionsEl.hidden = true;
 
   function formatVersion(value) {
     const v = String(value || '').trim();
@@ -30,87 +28,65 @@
     requestAnimationFrame(() => banner.classList.add('is-visible'));
   }
 
-  function hideBanner() {
-    banner.classList.remove('is-visible');
-    banner.setAttribute('aria-hidden', 'true');
-    window.setTimeout(() => {
-      banner.hidden = true;
-    }, 280);
-  }
-
   function setBannerMessage(text) {
     if (messageEl) messageEl.textContent = text;
   }
 
-  function showUpdateOffer(payload) {
-    if (updateDismissed || updateInProgress) return;
-
-    pendingPayload = payload;
-    const nextVersion = formatVersion(payload.latestVersion);
-    if (versionEl) versionEl.textContent = nextVersion;
-    setBannerMessage(
-      `La version ${nextVersion} est disponible. L’application redémarrera automatiquement après la mise à jour.`,
-    );
-
-    if (progressWrap) progressWrap.hidden = true;
-    if (actionsEl) actionsEl.hidden = false;
-    if (applyBtn) {
-      applyBtn.disabled = false;
-      applyBtn.textContent = 'Mise à jour';
-    }
-    if (laterBtn) laterBtn.disabled = false;
-
-    showBanner();
-  }
-
-  function showDownloading(progress) {
+  function showDownloading(progress, version) {
     updateInProgress = true;
     const percent = Math.max(0, Math.min(100, Math.round(progress?.percent || 0)));
+    if (versionEl && version) versionEl.textContent = formatVersion(version);
     if (progressWrap) progressWrap.hidden = false;
-    if (actionsEl) actionsEl.hidden = true;
     if (progressFill) progressFill.style.width = `${percent}%`;
     if (progressText) {
       progressText.textContent =
         percent > 0 ? `Téléchargement… ${percent}%` : 'Téléchargement…';
     }
-    setBannerMessage('Téléchargement de la mise à jour en cours…');
+    setBannerMessage('Mise à jour en cours. L’application redémarrera automatiquement.');
     showBanner();
   }
 
   function showRestarting(version) {
     updateInProgress = true;
     if (progressWrap) progressWrap.hidden = true;
-    if (actionsEl) actionsEl.hidden = true;
     const label = formatVersion(version);
+    if (versionEl && label) versionEl.textContent = label;
     setBannerMessage(
       label
-        ? `Installation de ${label}… L’application va redémarrer.`
-        : 'Installation en cours… L’application va redémarrer.',
+        ? `Installation de ${label}… Redémarrage en cours.`
+        : 'Installation en cours… Redémarrage automatique.',
     );
     showBanner();
+  }
+
+  function onUpdateFound(payload) {
+    if (updateInProgress) return;
+    const version = payload?.latestVersion || payload?.version;
+    if (!version && payload?.updateAvailable !== true) return;
+
+    updateInProgress = true;
+    showDownloading({ percent: 0 }, version);
   }
 
   function handleUpdateStatus(channel, payload) {
     switch (channel) {
       case 'update-check-result':
-        if (payload?.updateAvailable && !updateDismissed && !updateInProgress) {
-          showUpdateOffer(payload);
-        }
+        if (payload?.updateAvailable) onUpdateFound(payload);
+        break;
+      case 'update-available':
+        onUpdateFound({ updateAvailable: true, latestVersion: payload?.version });
         break;
       case 'update-download-progress':
-        showDownloading(payload);
+        showDownloading(payload, payload?.version);
         break;
       case 'update-downloaded':
         showRestarting(payload?.version);
         break;
       case 'update-error':
         updateInProgress = false;
-        if (applyBtn) applyBtn.disabled = false;
-        if (laterBtn) laterBtn.disabled = false;
-        if (actionsEl) actionsEl.hidden = false;
         if (progressWrap) progressWrap.hidden = true;
         setBannerMessage(
-          payload?.message || 'La mise à jour a échoué. Réessayez plus tard.',
+          payload?.message || 'La mise à jour a échoué. Réessayez au prochain démarrage.',
         );
         showBanner();
         break;
@@ -118,34 +94,6 @@
         break;
     }
   }
-
-  applyBtn?.addEventListener('click', async () => {
-    if (updateInProgress) return;
-
-    updateInProgress = true;
-    applyBtn.disabled = true;
-    laterBtn.disabled = true;
-    showDownloading({ percent: 0 });
-
-    try {
-      await updater.download();
-    } catch (error) {
-      updateInProgress = false;
-      applyBtn.disabled = false;
-      laterBtn.disabled = false;
-      if (actionsEl) actionsEl.hidden = false;
-      if (progressWrap) progressWrap.hidden = true;
-      setBannerMessage(
-        error?.message || 'Échec du téléchargement. Réessayez plus tard.',
-      );
-    }
-  });
-
-  laterBtn?.addEventListener('click', () => {
-    updateDismissed = true;
-    pendingPayload = null;
-    hideBanner();
-  });
 
   async function boot() {
     try {
@@ -164,8 +112,8 @@
     if (updater.notifyReady) {
       try {
         const result = await updater.notifyReady();
-        if (result?.updateAvailable && !updateDismissed) {
-          showUpdateOffer(result);
+        if (result?.updateAvailable) {
+          onUpdateFound(result);
         }
       } catch (error) {
         console.warn('Startup update check failed:', error);

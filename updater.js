@@ -99,7 +99,7 @@ function configureAutoUpdater() {
   autoUpdaterConfigured = true;
   autoUpdater.logger = log;
   autoUpdater.logger.transports.file.level = 'info';
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.allowDowngrade = false;
   autoUpdater.disableDifferentialDownload = true;
@@ -123,6 +123,11 @@ function configureAutoUpdater() {
 
   log.info('Auto-updater feed:', UPDATE_FEED_URL);
 
+  autoUpdater.on('update-available', (info) => {
+    log.info('Update available, auto-downloading:', info.version);
+    send('update-available', { version: info.version });
+  });
+
   autoUpdater.on('download-progress', (progress) => {
     send('update-download-progress', {
       percent: progress.percent,
@@ -133,11 +138,11 @@ function configureAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
-    log.info('Update downloaded, restarting:', info.version);
+    log.info('Update downloaded, silent install:', info.version);
     send('update-downloaded', { version: info.version });
     setTimeout(() => {
-      autoUpdater.quitAndInstall(false, true);
-    }, 400);
+      autoUpdater.quitAndInstall(true, true);
+    }, 800);
   });
 
   autoUpdater.on('error', (error) => {
@@ -177,6 +182,11 @@ async function performUpdateCheck() {
         payload.updateAvailable,
       );
       send('update-check-result', payload);
+      if (payload.updateAvailable) {
+        autoUpdater.downloadUpdate().catch((err) => {
+          log.warn('Auto download failed:', err?.message || err);
+        });
+      }
       return payload;
     } catch (error) {
       const message = error?.message || String(error);
@@ -235,7 +245,7 @@ function setupUpdaterIpc(ipcMain) {
   ipcMain.handle('update-install', () => {
     if (!app.isPackaged) return;
     configureAutoUpdater();
-    autoUpdater.quitAndInstall(false, true);
+    autoUpdater.quitAndInstall(true, true);
   });
 
   ipcMain.handle('updater-renderer-ready', async () => {

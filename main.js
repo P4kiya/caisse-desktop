@@ -33,6 +33,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
@@ -42,6 +43,10 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
+  });
+
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (${sourceId}:${line})`);
   });
 
   mainWindow.webContents.on('did-finish-load', injectAppVersionIntoPage);

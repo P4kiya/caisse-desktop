@@ -14,7 +14,6 @@ let mainWindow = null;
 let ipcRegistered = false;
 let autoUpdaterConfigured = false;
 let checkInFlight = null;
-let startupPromptDone = false;
 
 function compareVersions(left, right) {
   const parse = (value) =>
@@ -146,8 +145,9 @@ function configureAutoUpdater() {
   }
 
   autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: UPDATE_FEED_URL,
+    provider: 'github',
+    owner: 'P4kiya',
+    repo: 'caisse-desktop',
   });
 
   log.info('Auto-updater feed:', UPDATE_FEED_URL);
@@ -165,9 +165,6 @@ function configureAutoUpdater() {
     send('update-downloaded', {
       version: info.version,
       releaseNotes: info.releaseNotes,
-    });
-    promptDownloadedInstall(info.version).catch((error) => {
-      log.error('Install prompt failed:', error?.message || error);
     });
   });
 
@@ -357,34 +354,10 @@ function setupUpdaterIpc(ipcMain) {
   ipcMain.handle('app-get-version', () => app.getVersion());
   ipcMain.handle('app-is-packaged', () => app.isPackaged);
 
-  ipcMain.handle('update-check', async (_event, options = {}) => {
+  ipcMain.handle('update-check', async () => {
     const currentVersion = app.getVersion();
-    log.info('update-check invoked', {
-      interactive: Boolean(options.interactive),
-      currentVersion,
-    });
-
-    try {
-      const payload = await performUpdateCheck();
-
-      if (options.interactive) {
-        if (payload.devMode) {
-          await promptDevMode();
-        } else if (payload.updateAvailable) {
-          await promptUpdateAvailable(payload);
-        } else {
-          await promptUpToDate(payload);
-        }
-      }
-
-      return payload;
-    } catch (error) {
-      const message = error?.message || String(error);
-      if (options.interactive) {
-        await promptUpdateError(message, currentVersion);
-      }
-      throw error;
-    }
+    log.info('update-check invoked', { currentVersion });
+    return performUpdateCheck();
   });
 
   ipcMain.handle('update-download', async () => {
@@ -405,14 +378,7 @@ function setupUpdaterIpc(ipcMain) {
     log.info('Renderer ready, running startup update check');
 
     try {
-      const payload = await performUpdateCheck();
-
-      if (payload.updateAvailable && !startupPromptDone) {
-        startupPromptDone = true;
-        await promptUpdateAvailable(payload);
-      }
-
-      return payload;
+      return await performUpdateCheck();
     } catch (error) {
       log.warn('Startup update check failed:', error?.message || error);
       return null;

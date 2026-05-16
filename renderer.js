@@ -36,7 +36,6 @@ const filterButtons = document.querySelectorAll('.filter-btn');
 const kpiAmount = document.getElementById('kpiAmount');
 const kpiEntries = document.getElementById('kpiEntries');
 const kpiQuantity = document.getElementById('kpiQuantity');
-const kpiAverage = document.getElementById('kpiAverage');
 const kpiSubEntries = document.getElementById('kpiSubEntries');
 const toastStack = document.getElementById('toastStack');
 const confirmModal = document.getElementById('confirmModal');
@@ -605,7 +604,6 @@ function renderKpis(stats) {
   kpiAmount.textContent = formatMoney(stats.amount);
   kpiEntries.textContent = String(entries);
   kpiQuantity.textContent = String(stats.quantity ?? 0);
-  kpiAverage.textContent = formatMoney(stats.averageTicket);
   kpiSubEntries.textContent = `ventes sur ${label.toLowerCase()}`;
 }
 

@@ -22,46 +22,25 @@
   if (!modal) return;
 
   let currentVersion = '';
-  let manualCheck = false;
-
-  function parseVersionParts(value) {
-    return String(value || '')
-      .trim()
-      .replace(/^v/i, '')
-      .split('.')
-      .map((part) => Number.parseInt(part, 10) || 0);
-  }
-
-  function isNewerVersion(nextVersion) {
-    if (!nextVersion) return false;
-    if (!currentVersion) return true;
-
-    const next = parseVersionParts(nextVersion);
-    const current = parseVersionParts(currentVersion);
-    const length = Math.max(next.length, current.length);
-
-    for (let i = 0; i < length; i += 1) {
-      const nextPart = next[i] || 0;
-      const currentPart = current[i] || 0;
-      if (nextPart > currentPart) return true;
-      if (nextPart < currentPart) return false;
-    }
-
-    return false;
-  }
+  let infoCloseHandler = null;
 
   function openModal() {
     modal.hidden = false;
+    modal.removeAttribute('hidden');
     modal.setAttribute('aria-hidden', 'false');
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => modal.classList.add('is-open'));
-    });
+    modal.classList.add('is-open');
   }
 
   function closeModal() {
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
     laterBtn.hidden = false;
+
+    if (infoCloseHandler) {
+      downloadBtn.removeEventListener('click', infoCloseHandler);
+      infoCloseHandler = null;
+    }
+
     window.setTimeout(() => {
       modal.hidden = true;
     }, 260);
@@ -91,7 +70,7 @@
       updateTitleEl.textContent = 'Mise à jour disponible';
     }
 
-    const nextVersion = info?.version || '';
+    const nextVersion = info?.version || info?.latestVersion || '';
     versionEl.textContent = nextVersion ? `v${nextVersion}` : '';
     messageEl.textContent =
       'Une nouvelle version est disponible. Téléchargez-la pour profiter des dernières améliorations.';
@@ -139,47 +118,74 @@
     laterBtn.hidden = true;
     openModal();
 
-    const closeInfo = () => {
+    if (infoCloseHandler) {
+      downloadBtn.removeEventListener('click', infoCloseHandler);
+    }
+
+    infoCloseHandler = () => {
       laterBtn.hidden = false;
       downloadBtn.textContent = 'Télécharger';
-      downloadBtn.removeEventListener('click', closeInfo);
+      infoCloseHandler = null;
       closeModal();
     };
-    downloadBtn.addEventListener('click', closeInfo);
+    downloadBtn.addEventListener('click', infoCloseHandler);
+  }
+
+  function applyCheckResult(result, { showIfUpToDate = false } = {}) {
+    if (!result) return;
+
+    if (result.devMode) {
+      if (showIfUpToDate) {
+        showInfoDialog(
+          'Les mises à jour automatiques ne fonctionnent qu’avec l’application installée (.exe), pas en mode développement.',
+          { title: 'Mode développement' },
+        );
+      }
+      return;
+    }
+
+    if (result.updateAvailable) {
+      showAvailable({
+        version: result.latestVersion,
+        releaseNotes: result.releaseNotes,
+        releaseDate: result.releaseDate,
+      });
+      return;
+    }
+
+    if (!showIfUpToDate) return;
+
+    const latest = result.latestVersion || currentVersion;
+    showInfoDialog(
+      latest && latest !== currentVersion
+        ? `Vous utilisez la v${currentVersion}. La dernière version publiée est la v${latest}.`
+        : 'Vous utilisez déjà la dernière version disponible.',
+      { title: 'À jour' },
+    );
   }
 
   function handleUpdateStatus(channel, payload) {
     switch (channel) {
-      case 'update-available':
-        if (!isNewerVersion(payload?.version)) return;
-        manualCheck = false;
-        showAvailable(payload);
+      case 'update-check-result':
+        applyCheckResult(payload, { showIfUpToDate: false });
         break;
       case 'update-download-progress':
         showDownloading(payload);
         break;
       case 'update-downloaded':
-        manualCheck = false;
         showReady(payload);
-        break;
-      case 'update-not-available':
-        if (manualCheck) {
-          manualCheck = false;
-          showInfoDialog('Vous utilisez déjà la dernière version disponible.');
-        }
         break;
       case 'update-error': {
         const msg =
           payload?.message ||
           'Impossible de vérifier les mises à jour pour le moment.';
-        if (!manualCheck) return;
-        manualCheck = false;
         if (msg.includes('404') || msg.toLowerCase().includes('latest')) {
           showInfoDialog(
             'Aucune release trouvée sur GitHub. Vérifiez que npm run dist:publish a bien été exécuté.',
+            { title: 'Erreur' },
           );
         } else {
-          showInfoDialog(msg);
+          showInfoDialog(msg, { title: 'Erreur' });
         }
         break;
       }
@@ -194,15 +200,10 @@
     downloadBtn.disabled = true;
     laterBtn.disabled = true;
     try {
-      if (downloadBtn.textContent === 'Réessayer') {
-        manualCheck = true;
-        await updater.check();
-      } else {
-        setView('downloading');
-        progressFill.style.width = '0%';
-        progressText.textContent = 'Téléchargement… 0%';
-        await updater.download();
-      }
+      setView('downloading');
+      progressFill.style.width = '0%';
+      progressText.textContent = 'Téléchargement… 0%';
+      await updater.download();
     } catch (_) {
       downloadBtn.disabled = false;
       laterBtn.disabled = false;
@@ -223,44 +224,17 @@
     updater.install();
   });
 
-  function handleManualCheckResult(result) {
-    if (!manualCheck) return;
-
-    manualCheck = false;
-
-    if (result?.updateAvailable) {
-      showAvailable({
-        version: result.latestVersion,
-        releaseNotes: result.releaseNotes,
-        releaseDate: result.releaseDate,
-      });
-      return;
-    }
-
-    const latest = result?.latestVersion || currentVersion;
-    showInfoDialog(
-      latest && latest !== currentVersion
-        ? `Vous utilisez la v${currentVersion}. La dernière version publiée est la v${latest}.`
-        : 'Vous utilisez déjà la dernière version disponible.',
-      { title: 'À jour' },
-    );
-  }
-
   checkUpdatesBtn?.addEventListener('click', async () => {
-    manualCheck = true;
     checkUpdatesBtn.disabled = true;
 
     try {
       const result = await updater.check();
-      handleManualCheckResult(result);
+      applyCheckResult(result, { showIfUpToDate: true });
     } catch (error) {
-      if (manualCheck) {
-        manualCheck = false;
-        const msg =
-          error?.message ||
-          'Impossible de vérifier les mises à jour pour le moment.';
-        showInfoDialog(msg, { title: 'Erreur' });
-      }
+      const msg =
+        error?.message ||
+        'Impossible de vérifier les mises à jour pour le moment.';
+      showInfoDialog(msg, { title: 'Erreur' });
     } finally {
       checkUpdatesBtn.disabled = false;
     }
@@ -275,12 +249,24 @@
     updater.onStatus(handleUpdateStatus);
 
     const packaged = await updater.isPackaged();
-    if (packaged && checkUpdatesBtn) {
+    if (checkUpdatesBtn) {
       checkUpdatesBtn.hidden = false;
+      checkUpdatesBtn.title = packaged
+        ? 'Vérifier les mises à jour'
+        : 'Vérifier les mises à jour (mode dev)';
     }
 
-    if (packaged && updater.notifyReady) {
+    if (updater.notifyReady) {
       await updater.notifyReady();
+    }
+
+    if (packaged) {
+      try {
+        const result = await updater.check();
+        applyCheckResult(result, { showIfUpToDate: false });
+      } catch (error) {
+        console.warn('Startup update check failed:', error);
+      }
     }
   }
 

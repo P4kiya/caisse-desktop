@@ -6,6 +6,7 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 let mainWindow = null;
 let rendererReady = false;
+let checkInFlight = null;
 
 function compareVersions(left, right) {
   const parse = (value) =>
@@ -27,30 +28,106 @@ function compareVersions(left, right) {
   return 0;
 }
 
+function buildCheckPayload(result, currentVersion) {
+  const latestVersion =
+    result?.updateInfo?.version ||
+    result?.versionInfo?.version ||
+    currentVersion;
+
+  const updateAvailable =
+    result?.isUpdateAvailable === true ||
+    (latestVersion != null && compareVersions(latestVersion, currentVersion) > 0);
+
+  return {
+    currentVersion,
+    latestVersion,
+    updateAvailable,
+    releaseNotes: result?.updateInfo?.releaseNotes ?? null,
+    releaseDate: result?.updateInfo?.releaseDate ?? null,
+  };
+}
+
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
   }
 }
 
-function runUpdateCheck() {
-  if (!rendererReady) {
-    return Promise.resolve();
+async function performUpdateCheck() {
+  if (checkInFlight) {
+    return checkInFlight;
   }
 
-  return autoUpdater.checkForUpdates().catch((error) => {
-    const message = error?.message || String(error);
-    log.warn('Update check failed:', message);
-    send('update-error', { message });
+  const currentVersion = app.getVersion();
+
+  checkInFlight = (async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const payload = buildCheckPayload(result, currentVersion);
+      log.info(
+        'Update check:',
+        payload.currentVersion,
+        '->',
+        payload.latestVersion,
+        'available:',
+        payload.updateAvailable,
+      );
+      send('update-check-result', payload);
+
+      if (payload.updateAvailable) {
+        send('update-available', {
+          version: payload.latestVersion,
+          releaseNotes: payload.releaseNotes,
+          releaseDate: payload.releaseDate,
+        });
+      } else {
+        send('update-not-available', { version: payload.latestVersion });
+      }
+
+      return payload;
+    } catch (error) {
+      const message = error?.message || String(error);
+      log.warn('Update check failed:', message);
+      send('update-error', { message });
+      throw error;
+    } finally {
+      checkInFlight = null;
+    }
+  })();
+
+  return checkInFlight;
+}
+
+function registerBaseIpc(ipcMain) {
+  ipcMain.handle('app-get-version', () => app.getVersion());
+  ipcMain.handle('app-is-packaged', () => app.isPackaged);
+}
+
+function registerDevUpdateIpc(ipcMain) {
+  ipcMain.handle('update-check', async () => ({
+    currentVersion: app.getVersion(),
+    latestVersion: app.getVersion(),
+    updateAvailable: false,
+    devMode: true,
+  }));
+  ipcMain.handle('update-download', async () => {
+    throw new Error('Mises à jour indisponibles en mode développement.');
+  });
+  ipcMain.handle('update-install', () => {});
+  ipcMain.handle('updater-renderer-ready', () => {
+    rendererReady = true;
+    return null;
   });
 }
 
 function initAutoUpdater(win, { ipcMain }) {
+  registerBaseIpc(ipcMain);
+  mainWindow = win;
+
   if (!app.isPackaged) {
+    registerDevUpdateIpc(ipcMain);
     return;
   }
-
-  mainWindow = win;
 
   autoUpdater.logger = log;
   autoUpdater.logger.transports.file.level = 'info';
@@ -66,17 +143,16 @@ function initAutoUpdater(win, { ipcMain }) {
   });
 
   autoUpdater.on('update-available', (info) => {
-    log.info('Update available:', info.version);
-    send('update-available', {
-      version: info.version,
-      releaseNotes: info.releaseNotes,
-      releaseDate: info.releaseDate,
-    });
+    log.info('Update available event:', info.version);
   });
 
   autoUpdater.on('update-not-available', (info) => {
-    log.info('Update not available. Current:', app.getVersion(), 'Latest:', info?.version);
-    send('update-not-available', { version: info?.version });
+    log.info(
+      'Update not available event. Current:',
+      app.getVersion(),
+      'Latest:',
+      info?.version,
+    );
   });
 
   autoUpdater.on('error', (error) => {
@@ -100,28 +176,7 @@ function initAutoUpdater(win, { ipcMain }) {
     });
   });
 
-  ipcMain.handle('update-check', async () => {
-    const currentVersion = app.getVersion();
-
-    try {
-      const result = await autoUpdater.checkForUpdates();
-      const latestVersion = result?.updateInfo?.version || null;
-      const updateAvailable =
-        latestVersion != null &&
-        compareVersions(latestVersion, currentVersion) > 0;
-
-      return {
-        currentVersion,
-        latestVersion: latestVersion || currentVersion,
-        updateAvailable,
-        releaseNotes: result?.updateInfo?.releaseNotes ?? null,
-        releaseDate: result?.updateInfo?.releaseDate ?? null,
-      };
-    } catch (error) {
-      send('update-error', { message: error?.message || String(error) });
-      throw error;
-    }
-  });
+  ipcMain.handle('update-check', () => performUpdateCheck());
 
   ipcMain.handle('update-download', async () => {
     try {
@@ -136,15 +191,16 @@ function initAutoUpdater(win, { ipcMain }) {
     autoUpdater.quitAndInstall(false, true);
   });
 
-  ipcMain.handle('app-get-version', () => app.getVersion());
-  ipcMain.handle('app-is-packaged', () => app.isPackaged);
-
   ipcMain.handle('updater-renderer-ready', () => {
     rendererReady = true;
-    return runUpdateCheck();
+    return null;
   });
 
-  setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
+  setInterval(() => {
+    if (rendererReady) {
+      performUpdateCheck().catch(() => {});
+    }
+  }, CHECK_INTERVAL_MS);
 }
 
-module.exports = { initAutoUpdater };
+module.exports = { initAutoUpdater, registerBaseIpc };

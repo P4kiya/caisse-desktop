@@ -9,6 +9,7 @@ const apiBaseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace
 
 const UPDATE_CHANNELS = [
   'update-checking',
+  'update-check-result',
   'update-available',
   'update-not-available',
   'update-error',

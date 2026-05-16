@@ -7,6 +7,26 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 let mainWindow = null;
 let rendererReady = false;
 
+function compareVersions(left, right) {
+  const parse = (value) =>
+    String(value || '')
+      .trim()
+      .replace(/^v/i, '')
+      .split('.')
+      .map((part) => Number.parseInt(part, 10) || 0);
+
+  const a = parse(left);
+  const b = parse(right);
+  const length = Math.max(a.length, b.length);
+
+  for (let i = 0; i < length; i += 1) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff !== 0) return diff;
+  }
+
+  return 0;
+}
+
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
@@ -81,8 +101,22 @@ function initAutoUpdater(win, { ipcMain }) {
   });
 
   ipcMain.handle('update-check', async () => {
+    const currentVersion = app.getVersion();
+
     try {
-      return await autoUpdater.checkForUpdates();
+      const result = await autoUpdater.checkForUpdates();
+      const latestVersion = result?.updateInfo?.version || null;
+      const updateAvailable =
+        latestVersion != null &&
+        compareVersions(latestVersion, currentVersion) > 0;
+
+      return {
+        currentVersion,
+        latestVersion: latestVersion || currentVersion,
+        updateAvailable,
+        releaseNotes: result?.updateInfo?.releaseNotes ?? null,
+        releaseDate: result?.updateInfo?.releaseDate ?? null,
+      };
     } catch (error) {
       send('update-error', { message: error?.message || String(error) });
       throw error;

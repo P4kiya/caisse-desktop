@@ -15,6 +15,7 @@
   const laterReadyBtn = document.getElementById('updateLaterReadyBtn');
   const installBtn = document.getElementById('updateInstallBtn');
   const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
+  const updateTitleEl = document.getElementById('updateTitle');
   const appVersionEl = document.getElementById('appVersion');
   const backdrop = modal?.querySelector('.update-backdrop');
 
@@ -86,6 +87,10 @@
   }
 
   function showAvailable(info) {
+    if (updateTitleEl) {
+      updateTitleEl.textContent = 'Mise à jour disponible';
+    }
+
     const nextVersion = info?.version || '';
     versionEl.textContent = nextVersion ? `v${nextVersion}` : '';
     messageEl.textContent =
@@ -121,7 +126,11 @@
     openModal();
   }
 
-  function showInfoDialog(message) {
+  function showInfoDialog(message, { title = 'Mises à jour' } = {}) {
+    if (updateTitleEl) {
+      updateTitleEl.textContent = title;
+    }
+
     versionEl.textContent = currentVersion ? `v${currentVersion}` : '';
     messageEl.textContent = message;
     setView('available');
@@ -214,13 +223,44 @@
     updater.install();
   });
 
+  function handleManualCheckResult(result) {
+    if (!manualCheck) return;
+
+    manualCheck = false;
+
+    if (result?.updateAvailable) {
+      showAvailable({
+        version: result.latestVersion,
+        releaseNotes: result.releaseNotes,
+        releaseDate: result.releaseDate,
+      });
+      return;
+    }
+
+    const latest = result?.latestVersion || currentVersion;
+    showInfoDialog(
+      latest && latest !== currentVersion
+        ? `Vous utilisez la v${currentVersion}. La dernière version publiée est la v${latest}.`
+        : 'Vous utilisez déjà la dernière version disponible.',
+      { title: 'À jour' },
+    );
+  }
+
   checkUpdatesBtn?.addEventListener('click', async () => {
     manualCheck = true;
     checkUpdatesBtn.disabled = true;
+
     try {
-      await updater.check();
-    } catch (_) {
-      /* handled via update-error */
+      const result = await updater.check();
+      handleManualCheckResult(result);
+    } catch (error) {
+      if (manualCheck) {
+        manualCheck = false;
+        const msg =
+          error?.message ||
+          'Impossible de vérifier les mises à jour pour le moment.';
+        showInfoDialog(msg, { title: 'Erreur' });
+      }
     } finally {
       checkUpdatesBtn.disabled = false;
     }

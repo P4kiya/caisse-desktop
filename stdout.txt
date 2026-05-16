@@ -1,0 +1,2 @@
+
+21:20:18.853 > Auto-updater feed: https://github.com/P4kiya/caisse-desktop/releases/latest/download

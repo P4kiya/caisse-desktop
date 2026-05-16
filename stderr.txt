@@ -1,0 +1,9 @@
+[14400:0516/212018.898:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[14400:0516/212018.899:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[14400:0516/212018.899:ERROR:cache_util_win.cc(20)] Unable to move the cache: Access is denied. (0x5)
+[14400:0516/212018.904:ERROR:disk_cache.cc(208)] Unable to create cache
+[14400:0516/212018.905:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2
+[14400:0516/212018.906:ERROR:disk_cache.cc(208)] Unable to create cache
+[14400:0516/212018.906:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2
+[14400:0516/212018.907:ERROR:disk_cache.cc(208)] Unable to create cache
+[14400:0516/212018.907:ERROR:gpu_disk_cache.cc(713)] Gpu Cache Creation failed: -2

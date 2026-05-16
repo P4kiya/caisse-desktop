@@ -14,6 +14,8 @@ cd caisse-desktop
 npm install
 ```
 
+Copy `.env.example` to `.env` and set `API_BASE_URL`.
+
 ## Run in development
 
 1. Start the API in another terminal:
@@ -31,13 +33,11 @@ npm install
 
 ## Point to production (VPS)
 
-Edit the first line in `renderer.js`:
+Edit `API_BASE_URL` in `.env` (no trailing slash), for example:
 
-```javascript
-const API_BASE_URL = 'https://your-vps-domain.com';
 ```
-
-Use your real API origin (scheme + host + port if not 443). Do not add a trailing slash.
+API_BASE_URL=https://your-vps-domain.com
+```
 
 ## Package as Windows `.exe`
 
@@ -68,46 +68,28 @@ The installed app checks for updates on startup and every 4 hours. When a newer 
 
 Updates work only in the **packaged installer** (`npm run dist`), not when running `npm run dev`.
 
-### 1. Configure GitHub
+Repository: **P4kiya/caisse-desktop**
 
-In `package.json`, under `build.publish`, set your GitHub username and repository name:
-
-```json
-"publish": [
-  {
-    "provider": "github",
-    "owner": "your-github-username",
-    "repo": "caisse-desktop"
-  }
-]
-```
-
-Create the repository on GitHub and push this project.
-
-### 2. Publish a release
+### Publish a release
 
 1. Bump the version in `package.json` (e.g. `1.0.0` → `1.0.1`).
 2. Create a [GitHub personal access token](https://github.com/settings/tokens) with `repo` scope.
 3. Build and upload to GitHub Releases:
 
-   ```bash
-   set GH_TOKEN=ghp_your_token_here
-   npm run dist:publish
-   ```
-
-   On PowerShell:
-
    ```powershell
+   cd caisse-desktop
    $env:GH_TOKEN="ghp_your_token_here"
    npm run dist:publish
    ```
 
+   Do not commit `GH_TOKEN` or put it in `.env`.
+
 This uploads the installer and `latest.yml` (required for auto-update).
 
-### 3. User experience
+### User experience
 
 1. User runs an older installed version.
-2. App detects `1.0.1` on GitHub.
+2. App detects a newer version on GitHub.
 3. Popup: **Mise à jour disponible** → **Télécharger** → progress bar → **Redémarrer**.
 
 ### Notes
@@ -118,10 +100,10 @@ This uploads the installer and `latest.yml` (required for auto-update).
 
 ## Project layout
 
-| File          | Role                                      |
-|---------------|-------------------------------------------|
-| `main.js`     | Electron main process, window lifecycle   |
-| `updater.js`  | Auto-update checks (`electron-updater`)   |
-| `update-ui.js`| Update popup in the renderer                |
-| `index.html`  | UI (inputs, buttons, list)                |
-| `renderer.js` | `fetch()` calls to the API                |
+| File           | Role                                    |
+|----------------|-----------------------------------------|
+| `main.js`      | Electron main process, window lifecycle |
+| `updater.js`   | Auto-update checks (`electron-updater`) |
+| `update-ui.js` | Update popup in the renderer            |
+| `index.html`   | UI (inputs, buttons, list)              |
+| `renderer.js`  | `fetch()` calls to the API                |

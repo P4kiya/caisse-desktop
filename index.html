@@ -703,18 +703,6 @@
         pointer-events: auto;
       }
 
-      .update-modal.is-open {
-        z-index: 1200;
-        display: flex !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-      }
-
-      .update-modal.is-open .confirm-dialog {
-        opacity: 1 !important;
-        transform: scale(1) translateY(0) !important;
-      }
-
       .confirm-backdrop {
         position: absolute;
         inset: 0;
@@ -828,56 +816,77 @@
         background: var(--primary-hover);
       }
 
-      .update-modal {
-        z-index: 1150;
+      .update-banner {
+        position: fixed;
+        top: 72px;
+        right: 20px;
+        z-index: 1200;
+        width: min(340px, calc(100vw - 40px));
+        pointer-events: none;
+        opacity: 0;
+        transform: translateX(16px);
+        transition:
+          opacity 0.28s ease,
+          transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
       }
 
-      .update-modal .update-dialog {
-        text-align: center;
+      .update-banner[hidden] {
+        display: none;
       }
 
-      .update-icon {
-        width: 52px;
-        height: 52px;
-        margin: 0 auto 16px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        background: var(--primary-soft);
-        color: var(--primary);
-        border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+      .update-banner.is-visible {
+        opacity: 1;
+        transform: translateX(0);
       }
 
-      .update-version {
-        display: inline-block;
-        margin: 0 0 12px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 0.8rem;
+      .update-banner-inner {
+        pointer-events: auto;
+        padding: 16px 18px;
+        border-radius: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md), var(--shadow-lg);
+      }
+
+      .update-banner-title {
+        margin: 0;
+        font-size: 0.95rem;
         font-weight: 600;
+        color: var(--text);
+      }
+
+      .update-banner-version {
+        display: inline-block;
+        margin: 8px 0 0;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
         color: var(--primary);
         background: var(--primary-soft);
-        border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
       }
 
-      #updateMessage {
-        white-space: pre-line;
-        max-height: 120px;
-        overflow-y: auto;
+      .update-banner-message {
+        margin: 10px 0 0;
+        font-size: 0.85rem;
+        line-height: 1.45;
+        color: var(--text-muted);
       }
 
-      .update-progress-track {
-        height: 8px;
-        margin-top: 16px;
+      .update-banner-progress {
+        margin-top: 12px;
+      }
+
+      .update-banner-progress-track {
+        height: 6px;
         border-radius: 999px;
         background: var(--surface-muted);
         overflow: hidden;
         border: 1px solid var(--border);
       }
 
-      .update-progress-fill {
+      .update-banner-progress-fill {
         display: block;
         height: 100%;
         width: 0;
@@ -886,10 +895,57 @@
         transition: width 0.2s ease;
       }
 
-      .update-progress-text {
-        margin: 8px 0 0;
-        font-size: 0.85rem;
+      .update-banner-progress-text {
+        margin: 6px 0 0;
+        font-size: 0.8rem;
         color: var(--text-muted);
+      }
+
+      .update-banner-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .update-banner-actions .btn-update {
+        flex: 1;
+        padding: 10px 12px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease;
+      }
+
+      .btn-update-later {
+        background: var(--surface);
+        color: var(--text-muted);
+        border-color: var(--border-strong);
+      }
+
+      .btn-update-later:hover {
+        background: var(--surface-muted);
+        color: var(--text);
+      }
+
+      .btn-update-apply {
+        background: var(--primary);
+        color: var(--on-primary);
+        border-color: var(--primary);
+        box-shadow: var(--btn-primary-shadow);
+      }
+
+      .btn-update-apply:hover {
+        background: var(--primary-hover);
+      }
+
+      .btn-update-apply:disabled,
+      .btn-update-later:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
       }
 
       .draft-box {
@@ -1305,19 +1361,6 @@
         <div class="header-actions">
           <button
             type="button"
-            id="checkUpdatesBtn"
-            class="theme-toggle"
-            hidden
-            aria-label="Vérifier les mises à jour"
-            title="Vérifier les mises à jour"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <path d="M21 3v6h-6" />
-            </svg>
-          </button>
-          <button
-            type="button"
             id="numpadToggle"
             class="theme-toggle"
             aria-label="Afficher le pavé numérique"
@@ -1498,49 +1541,33 @@
       </div>
     </div>
 
-    <div
-      id="updateModal"
-      class="confirm-modal update-modal"
+    <aside
+      id="updateBanner"
+      class="update-banner"
       hidden
-      aria-hidden="true"
+      aria-live="polite"
+      aria-atomic="true"
     >
-      <div class="confirm-backdrop update-backdrop"></div>
-      <div
-        class="confirm-dialog update-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="updateTitle"
-        aria-describedby="updateMessage"
-      >
-        <div class="update-icon" aria-hidden="true">↑</div>
-        <h3 id="updateTitle" class="confirm-title">Mise à jour disponible</h3>
-        <p id="updateVersion" class="update-version"></p>
-        <p id="updateMessage" class="confirm-message"></p>
-        <div id="updateProgressWrap" hidden>
-          <div class="update-progress-track">
-            <span id="updateProgressFill" class="update-progress-fill"></span>
+      <div class="update-banner-inner" role="status">
+        <p class="update-banner-title">Mise à jour disponible</p>
+        <p id="updateBannerVersion" class="update-banner-version"></p>
+        <p id="updateBannerMessage" class="update-banner-message"></p>
+        <div id="updateBannerProgress" class="update-banner-progress" hidden>
+          <div class="update-banner-progress-track">
+            <span id="updateBannerProgressFill" class="update-banner-progress-fill"></span>
           </div>
-          <p id="updateProgressText" class="update-progress-text">Téléchargement… 0%</p>
+          <p id="updateBannerProgressText" class="update-banner-progress-text"></p>
         </div>
-        <div class="confirm-actions" id="updateActionsAvailable">
-          <button type="button" id="updateLaterBtn" class="btn-confirm btn-confirm-cancel">
+        <div id="updateBannerActions" class="update-banner-actions">
+          <button type="button" id="updateLaterBtn" class="btn-update btn-update-later">
             Plus tard
           </button>
-          <button type="button" id="updateDownloadBtn" class="btn-confirm btn-confirm-primary">
-            Télécharger
-          </button>
-        </div>
-        <div class="confirm-actions" id="updateActionsReady" hidden>
-          <button type="button" id="updateLaterReadyBtn" class="btn-confirm btn-confirm-cancel">
-            Plus tard
-          </button>
-          <button type="button" id="updateInstallBtn" class="btn-confirm btn-confirm-primary">
-            Redémarrer
+          <button type="button" id="updateApplyBtn" class="btn-update btn-update-apply">
+            Mise à jour
           </button>
         </div>
       </div>
-    </div>
-
+    </aside>
     <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <script src="renderer.js"></script>

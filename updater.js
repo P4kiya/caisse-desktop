@@ -1,5 +1,5 @@
 const path = require('path');
-const { app, BrowserWindow, dialog, shell } = require('electron');
+const { app } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 
@@ -8,7 +8,6 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const UPDATE_FEED_URL =
   'https://github.com/P4kiya/caisse-desktop/releases/latest/download';
-const RELEASES_PAGE_URL = 'https://github.com/P4kiya/caisse-desktop/releases/latest';
 
 let mainWindow = null;
 let ipcRegistered = false;
@@ -74,16 +73,7 @@ async function resolveUpdatePayload(result, currentVersion) {
 
   try {
     const yamlVersion = await fetchLatestVersionFromYaml();
-    if (yamlVersion && compareVersions(yamlVersion, currentVersion) > 0) {
-      if (!payload.updateAvailable || payload.latestVersion !== yamlVersion) {
-        log.info('Using latest.yml version:', yamlVersion);
-      }
-      payload = {
-        ...payload,
-        latestVersion: yamlVersion,
-        updateAvailable: true,
-      };
-    } else if (yamlVersion) {
+    if (yamlVersion) {
       payload.latestVersion = yamlVersion;
       payload.updateAvailable =
         compareVersions(yamlVersion, currentVersion) > 0;
@@ -93,24 +83,6 @@ async function resolveUpdatePayload(result, currentVersion) {
   }
 
   return payload;
-}
-
-function getDialogParent() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (!mainWindow.isFocused()) {
-      mainWindow.focus();
-    }
-    return mainWindow;
-  }
-  return BrowserWindow.getFocusedWindow() || null;
-}
-
-async function showAppDialog(options) {
-  const parent = getDialogParent();
-  return dialog.showMessageBox(parent ?? undefined, {
-    noLink: true,
-    ...options,
-  });
 }
 
 function send(channel, payload) {
@@ -145,9 +117,8 @@ function configureAutoUpdater() {
   }
 
   autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'P4kiya',
-    repo: 'caisse-desktop',
+    provider: 'generic',
+    url: UPDATE_FEED_URL,
   });
 
   log.info('Auto-updater feed:', UPDATE_FEED_URL);
@@ -162,120 +133,17 @@ function configureAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
-    send('update-downloaded', {
-      version: info.version,
-      releaseNotes: info.releaseNotes,
-    });
+    log.info('Update downloaded, restarting:', info.version);
+    send('update-downloaded', { version: info.version });
+    setTimeout(() => {
+      autoUpdater.quitAndInstall(false, true);
+    }, 400);
   });
 
   autoUpdater.on('error', (error) => {
     log.error('Auto-updater error:', error?.message || error);
     send('update-error', { message: error?.message || String(error) });
   });
-}
-
-async function promptDownloadedInstall(version) {
-  const { response } = await showAppDialog({
-    type: 'info',
-    title: 'Mise à jour prête',
-    message: `La version ${version || ''} est prête à être installée.`,
-    detail: 'Redémarrez l’application pour terminer la mise à jour.',
-    buttons: ['Redémarrer', 'Plus tard'],
-    defaultId: 0,
-    cancelId: 1,
-  });
-
-  if (response === 0) {
-    autoUpdater.quitAndInstall(false, true);
-  }
-}
-
-async function promptUpdateAvailable(payload) {
-  log.info('Showing update-available dialog', payload);
-
-  const { response } = await showAppDialog({
-    type: 'info',
-    title: 'Mise à jour disponible',
-    message: `La version ${payload.latestVersion} est disponible.`,
-    detail: `Vous utilisez actuellement la version ${payload.currentVersion}.`,
-    buttons: ['Télécharger', 'Page web', 'Plus tard'],
-    defaultId: 0,
-    cancelId: 2,
-  });
-
-  if (response === 1) {
-    shell.openExternal(RELEASES_PAGE_URL);
-    return;
-  }
-
-  if (response !== 0) return;
-
-  try {
-    send('update-download-progress', { percent: 0 });
-    await autoUpdater.downloadUpdate();
-  } catch (error) {
-    const message = error?.message || String(error);
-    log.error('Download failed:', message);
-    send('update-error', { message });
-
-    const { response: retryResponse } = await showAppDialog({
-      type: 'error',
-      title: 'Échec du téléchargement',
-      message,
-      detail: 'Vous pouvez télécharger l’installateur manuellement depuis GitHub.',
-      buttons: ['Page web', 'OK'],
-      defaultId: 0,
-    });
-
-    if (retryResponse === 0) {
-      shell.openExternal(RELEASES_PAGE_URL);
-    }
-  }
-}
-
-async function promptUpToDate(payload) {
-  log.info('Showing up-to-date dialog', payload);
-
-  await showAppDialog({
-    type: 'info',
-    title: 'À jour',
-    message: 'Vous utilisez déjà la dernière version disponible.',
-    detail: `Version installée : ${payload.currentVersion}${
-      payload.latestVersion ? ` — Dernière release : ${payload.latestVersion}` : ''
-    }`,
-    buttons: ['OK'],
-  });
-}
-
-async function promptDevMode() {
-  await showAppDialog({
-    type: 'info',
-    title: 'Mises à jour',
-    message: 'Les mises à jour automatiques ne fonctionnent qu’avec l’application installée (.exe).',
-    detail:
-      'Désinstallez les anciennes versions, installez « Caisse Setup » depuis GitHub Releases, puis lancez Caisse depuis le menu Démarrer (pas npm run dev).',
-    buttons: ['Ouvrir GitHub', 'OK'],
-    defaultId: 1,
-  }).then(({ response }) => {
-    if (response === 0) shell.openExternal(RELEASES_PAGE_URL);
-  });
-}
-
-async function promptUpdateError(message, currentVersion) {
-  const { response } = await showAppDialog({
-    type: 'error',
-    title: 'Erreur de mise à jour',
-    message,
-    detail: currentVersion
-      ? `Version actuelle détectée : ${currentVersion}. Vous pouvez installer manuellement depuis GitHub.`
-      : 'Vous pouvez installer manuellement depuis GitHub.',
-    buttons: ['Page web', 'OK'],
-    defaultId: 0,
-  });
-
-  if (response === 0) {
-    shell.openExternal(RELEASES_PAGE_URL);
-  }
 }
 
 async function performUpdateCheck() {
@@ -354,11 +222,7 @@ function setupUpdaterIpc(ipcMain) {
   ipcMain.handle('app-get-version', () => app.getVersion());
   ipcMain.handle('app-is-packaged', () => app.isPackaged);
 
-  ipcMain.handle('update-check', async () => {
-    const currentVersion = app.getVersion();
-    log.info('update-check invoked', { currentVersion });
-    return performUpdateCheck();
-  });
+  ipcMain.handle('update-check', () => performUpdateCheck());
 
   ipcMain.handle('update-download', async () => {
     if (!app.isPackaged) {
@@ -376,7 +240,6 @@ function setupUpdaterIpc(ipcMain) {
 
   ipcMain.handle('updater-renderer-ready', async () => {
     log.info('Renderer ready, running startup update check');
-
     try {
       return await performUpdateCheck();
     } catch (error) {

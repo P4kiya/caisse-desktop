@@ -1,281 +1,174 @@
 (function initUpdateUi() {
   const updater = window.caisseUpdater;
-
-  const modal = document.getElementById('updateModal');
-  const messageEl = document.getElementById('updateMessage');
-  const versionEl = document.getElementById('updateVersion');
-  const progressWrap = document.getElementById('updateProgressWrap');
-  const progressFill = document.getElementById('updateProgressFill');
-  const progressText = document.getElementById('updateProgressText');
-  const actionsAvailable = document.getElementById('updateActionsAvailable');
-  const actionsReady = document.getElementById('updateActionsReady');
-  const downloadBtn = document.getElementById('updateDownloadBtn');
+  const banner = document.getElementById('updateBanner');
+  const versionEl = document.getElementById('updateBannerVersion');
+  const messageEl = document.getElementById('updateBannerMessage');
+  const progressWrap = document.getElementById('updateBannerProgress');
+  const progressFill = document.getElementById('updateBannerProgressFill');
+  const progressText = document.getElementById('updateBannerProgressText');
+  const actionsEl = document.getElementById('updateBannerActions');
+  const applyBtn = document.getElementById('updateApplyBtn');
   const laterBtn = document.getElementById('updateLaterBtn');
-  const laterReadyBtn = document.getElementById('updateLaterReadyBtn');
-  const installBtn = document.getElementById('updateInstallBtn');
-  const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
-  const updateTitleEl = document.getElementById('updateTitle');
   const appVersionEl = document.getElementById('appVersion');
-  const backdrop = modal?.querySelector('.update-backdrop');
+
+  if (!updater || !banner) return;
 
   let currentVersion = window.caisseApp?.version || '';
+  let updateDismissed = false;
+  let updateInProgress = false;
+  let pendingPayload = null;
 
-  if (!updater) return;
-  if (!modal) return;
-  let infoCloseHandler = null;
-
-  function openModal() {
-    modal.hidden = false;
-    modal.removeAttribute('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-    modal.classList.add('is-open');
+  function formatVersion(value) {
+    const v = String(value || '').trim();
+    return v ? (v.startsWith('v') ? v : `v${v}`) : '';
   }
 
-  function closeModal() {
-    modal.classList.remove('is-open');
-    modal.setAttribute('aria-hidden', 'true');
-    laterBtn.hidden = false;
+  function showBanner() {
+    banner.hidden = false;
+    banner.removeAttribute('hidden');
+    banner.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => banner.classList.add('is-visible'));
+  }
 
-    if (infoCloseHandler) {
-      downloadBtn.removeEventListener('click', infoCloseHandler);
-      infoCloseHandler = null;
-    }
-
+  function hideBanner() {
+    banner.classList.remove('is-visible');
+    banner.setAttribute('aria-hidden', 'true');
     window.setTimeout(() => {
-      modal.hidden = true;
-    }, 260);
+      banner.hidden = true;
+    }, 280);
   }
 
-  function setView(view) {
-    progressWrap.hidden = view !== 'downloading';
-    actionsAvailable.hidden = view !== 'available';
-    actionsReady.hidden = view !== 'ready';
+  function setBannerMessage(text) {
+    if (messageEl) messageEl.textContent = text;
   }
 
-  function formatReleaseNotes(notes) {
-    if (!notes) return '';
-    if (typeof notes === 'string') return notes.trim();
-    if (Array.isArray(notes)) {
-      return notes
-        .map((entry) => (typeof entry === 'string' ? entry : entry?.note || ''))
-        .filter(Boolean)
-        .join('\n')
-        .trim();
+  function showUpdateOffer(payload) {
+    if (updateDismissed || updateInProgress) return;
+
+    pendingPayload = payload;
+    const nextVersion = formatVersion(payload.latestVersion);
+    if (versionEl) versionEl.textContent = nextVersion;
+    setBannerMessage(
+      `La version ${nextVersion} est disponible. L’application redémarrera automatiquement après la mise à jour.`,
+    );
+
+    if (progressWrap) progressWrap.hidden = true;
+    if (actionsEl) actionsEl.hidden = false;
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.textContent = 'Mise à jour';
     }
-    return '';
-  }
+    if (laterBtn) laterBtn.disabled = false;
 
-  function showAvailable(info) {
-    if (updateTitleEl) {
-      updateTitleEl.textContent = 'Mise à jour disponible';
-    }
-
-    const nextVersion = info?.version || info?.latestVersion || '';
-    versionEl.textContent = nextVersion ? `v${nextVersion}` : '';
-    messageEl.textContent =
-      'Une nouvelle version est disponible. Téléchargez-la pour profiter des dernières améliorations.';
-
-    const notes = formatReleaseNotes(info?.releaseNotes);
-    if (notes) {
-      messageEl.textContent += `\n\n${notes}`;
-    }
-
-    setView('available');
-    downloadBtn.textContent = 'Télécharger';
-    downloadBtn.disabled = false;
-    laterBtn.disabled = false;
-    laterBtn.hidden = false;
-    openModal();
+    showBanner();
   }
 
   function showDownloading(progress) {
+    updateInProgress = true;
     const percent = Math.max(0, Math.min(100, Math.round(progress?.percent || 0)));
-    progressFill.style.width = `${percent}%`;
-    progressText.textContent = `Téléchargement… ${percent}%`;
-    setView('downloading');
-    openModal();
+    if (progressWrap) progressWrap.hidden = false;
+    if (actionsEl) actionsEl.hidden = true;
+    if (progressFill) progressFill.style.width = `${percent}%`;
+    if (progressText) {
+      progressText.textContent =
+        percent > 0 ? `Téléchargement… ${percent}%` : 'Téléchargement…';
+    }
+    setBannerMessage('Téléchargement de la mise à jour en cours…');
+    showBanner();
   }
 
-  function showReady(info) {
-    const nextVersion = info?.version || '';
-    versionEl.textContent = nextVersion ? `v${nextVersion}` : '';
-    messageEl.textContent =
-      'La mise à jour est prête. Redémarrez l’application pour l’installer.';
-    setView('ready');
-    openModal();
-  }
-
-  function showInfoDialog(message, { title = 'Mises à jour' } = {}) {
-    if (updateTitleEl) {
-      updateTitleEl.textContent = title;
-    }
-
-    versionEl.textContent = currentVersion ? `v${currentVersion}` : '';
-    messageEl.textContent = message;
-    setView('available');
-    downloadBtn.textContent = 'Fermer';
-    downloadBtn.disabled = false;
-    laterBtn.hidden = true;
-    openModal();
-
-    if (infoCloseHandler) {
-      downloadBtn.removeEventListener('click', infoCloseHandler);
-    }
-
-    infoCloseHandler = () => {
-      laterBtn.hidden = false;
-      downloadBtn.textContent = 'Télécharger';
-      infoCloseHandler = null;
-      closeModal();
-    };
-    downloadBtn.addEventListener('click', infoCloseHandler);
-  }
-
-  function applyCheckResult(result, { showIfUpToDate = false } = {}) {
-    if (!result) return;
-
-    if (result.devMode) {
-      if (showIfUpToDate) {
-        showInfoDialog(
-          'Les mises à jour automatiques ne fonctionnent qu’avec l’application installée (.exe), pas en mode développement.',
-          { title: 'Mode développement' },
-        );
-      }
-      return;
-    }
-
-    if (result.updateAvailable) {
-      showAvailable({
-        version: result.latestVersion,
-        releaseNotes: result.releaseNotes,
-        releaseDate: result.releaseDate,
-      });
-      return;
-    }
-
-    if (!showIfUpToDate) return;
-
-    const latest = result.latestVersion || currentVersion;
-    showInfoDialog(
-      latest && latest !== currentVersion
-        ? `Vous utilisez la v${currentVersion}. La dernière version publiée est la v${latest}.`
-        : 'Vous utilisez déjà la dernière version disponible.',
-      { title: 'À jour' },
+  function showRestarting(version) {
+    updateInProgress = true;
+    if (progressWrap) progressWrap.hidden = true;
+    if (actionsEl) actionsEl.hidden = true;
+    const label = formatVersion(version);
+    setBannerMessage(
+      label
+        ? `Installation de ${label}… L’application va redémarrer.`
+        : 'Installation en cours… L’application va redémarrer.',
     );
+    showBanner();
   }
 
   function handleUpdateStatus(channel, payload) {
     switch (channel) {
       case 'update-check-result':
-        applyCheckResult(payload, { showIfUpToDate: false });
+        if (payload?.updateAvailable && !updateDismissed && !updateInProgress) {
+          showUpdateOffer(payload);
+        }
         break;
       case 'update-download-progress':
         showDownloading(payload);
         break;
       case 'update-downloaded':
-        showReady(payload);
+        showRestarting(payload?.version);
         break;
-      case 'update-error': {
-        const msg =
-          payload?.message ||
-          'Impossible de vérifier les mises à jour pour le moment.';
-        if (msg.includes('404') || msg.toLowerCase().includes('latest')) {
-          showInfoDialog(
-            'Aucune release trouvée sur GitHub. Vérifiez que npm run dist:publish a bien été exécuté.',
-            { title: 'Erreur' },
-          );
-        } else {
-          showInfoDialog(msg, { title: 'Erreur' });
-        }
+      case 'update-error':
+        updateInProgress = false;
+        if (applyBtn) applyBtn.disabled = false;
+        if (laterBtn) laterBtn.disabled = false;
+        if (actionsEl) actionsEl.hidden = false;
+        if (progressWrap) progressWrap.hidden = true;
+        setBannerMessage(
+          payload?.message || 'La mise à jour a échoué. Réessayez plus tard.',
+        );
+        showBanner();
         break;
-      }
       default:
         break;
     }
   }
 
-  downloadBtn.addEventListener('click', async () => {
-    if (downloadBtn.textContent === 'Fermer') return;
+  applyBtn?.addEventListener('click', async () => {
+    if (updateInProgress) return;
 
-    downloadBtn.disabled = true;
+    updateInProgress = true;
+    applyBtn.disabled = true;
     laterBtn.disabled = true;
+    showDownloading({ percent: 0 });
+
     try {
-      setView('downloading');
-      progressFill.style.width = '0%';
-      progressText.textContent = 'Téléchargement… 0%';
       await updater.download();
-    } catch (_) {
-      downloadBtn.disabled = false;
-      laterBtn.disabled = false;
-    }
-  });
-
-  laterBtn.addEventListener('click', closeModal);
-  laterReadyBtn.addEventListener('click', closeModal);
-  backdrop?.addEventListener('click', () => {
-    if (!actionsReady.hidden) return;
-    if (!progressWrap.hidden) return;
-    closeModal();
-  });
-
-  installBtn.addEventListener('click', () => {
-    installBtn.disabled = true;
-    installBtn.textContent = 'Redémarrage…';
-    updater.install();
-  });
-
-  checkUpdatesBtn?.addEventListener('click', async () => {
-    checkUpdatesBtn.disabled = true;
-
-    try {
-      const result = await updater.check();
-      applyCheckResult(result, { showIfUpToDate: true });
     } catch (error) {
-      const msg =
-        error?.message ||
-        'Impossible de vérifier les mises à jour pour le moment.';
-      showInfoDialog(msg, { title: 'Erreur' });
-    } finally {
-      checkUpdatesBtn.disabled = false;
+      updateInProgress = false;
+      applyBtn.disabled = false;
+      laterBtn.disabled = false;
+      if (actionsEl) actionsEl.hidden = false;
+      if (progressWrap) progressWrap.hidden = true;
+      setBannerMessage(
+        error?.message || 'Échec du téléchargement. Réessayez plus tard.',
+      );
     }
+  });
+
+  laterBtn?.addEventListener('click', () => {
+    updateDismissed = true;
+    pendingPayload = null;
+    hideBanner();
   });
 
   async function boot() {
     try {
-      currentVersion = (await updater.getVersion()) || '';
+      currentVersion = (await updater.getVersion()) || currentVersion;
     } catch (error) {
-      console.error('Failed to read app version:', error);
+      console.warn('Could not read app version:', error);
     }
 
     if (appVersionEl && currentVersion) {
-      appVersionEl.textContent = currentVersion.startsWith('v')
-        ? currentVersion
-        : `v${currentVersion}`;
+      appVersionEl.textContent = formatVersion(currentVersion);
       appVersionEl.hidden = false;
     }
 
     updater.onStatus(handleUpdateStatus);
 
-    let packaged = false;
-    try {
-      packaged = await updater.isPackaged();
-    } catch (error) {
-      console.error('Failed to read packaged state:', error);
-    }
-
-    if (checkUpdatesBtn) {
-      checkUpdatesBtn.hidden = false;
-      checkUpdatesBtn.title = packaged
-        ? 'Vérifier les mises à jour'
-        : 'Vérifier les mises à jour (mode dev)';
-    }
-
     if (updater.notifyReady) {
       try {
         const result = await updater.notifyReady();
-        applyCheckResult(result, { showIfUpToDate: false });
+        if (result?.updateAvailable && !updateDismissed) {
+          showUpdateOffer(result);
+        }
       } catch (error) {
-        console.error('Startup update notify failed:', error);
+        console.warn('Startup update check failed:', error);
       }
     }
   }

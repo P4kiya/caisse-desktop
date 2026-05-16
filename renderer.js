@@ -46,11 +46,10 @@ const confirmOkBtn = document.getElementById('confirmOkBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const confirmBackdrop = confirmModal?.querySelector('.confirm-backdrop');
 const themeToggle = document.getElementById('themeToggle');
-const numpadModal = document.getElementById('numpadModal');
+const numpadToggle = document.getElementById('numpadToggle');
+const numpadPanel = document.getElementById('numpadPanel');
 const numpadEl = document.getElementById('numpad');
-const numpadBackdrop = document.getElementById('numpadBackdrop');
 const numpadClose = document.getElementById('numpadClose');
-const numpadDone = document.getElementById('numpadDone');
 const numpadPreview = document.getElementById('numpadPreview');
 const numpadTargetHint = document.getElementById('numpadTargetHint');
 const numpadDecimalBtn = document.getElementById('numpadDecimal');
@@ -59,6 +58,9 @@ let numpadTarget = priceInput;
 
 const TOAST_DURATION_MS = 4200;
 const THEME_STORAGE_KEY = 'caisse-theme';
+const NUMPAD_STORAGE_KEY = 'caisse-numpad-open';
+
+let numpadOpen = false;
 
 function setStatus(message, type = '') {
   statusEl.textContent = message;
@@ -219,8 +221,14 @@ function setBusy(busy) {
 
 function setNumpadTarget(input) {
   numpadTarget = input;
-  priceInput.classList.toggle('is-numpad-active', input === priceInput);
-  quantityInput.classList.toggle('is-numpad-active', input === quantityInput);
+  priceInput.classList.toggle(
+    'is-numpad-active',
+    numpadOpen && input === priceInput,
+  );
+  quantityInput.classList.toggle(
+    'is-numpad-active',
+    numpadOpen && input === quantityInput,
+  );
   updateNumpadUi();
   updateNumpadPreview();
 }
@@ -230,25 +238,75 @@ function updateNumpadPreview() {
   numpadPreview.textContent = numpadTarget.value || '';
 }
 
-function openNumpadModal(input) {
-  if (!numpadModal) return;
-  setNumpadTarget(input);
-  numpadModal.hidden = false;
-  numpadModal.setAttribute('aria-hidden', 'false');
+function updateNumpadToggleUi() {
+  if (!numpadToggle) return;
+
+  numpadToggle.setAttribute('aria-pressed', numpadOpen ? 'true' : 'false');
+  numpadToggle.setAttribute(
+    'aria-label',
+    numpadOpen ? 'Masquer le pavé numérique' : 'Afficher le pavé numérique',
+  );
+  numpadToggle.title = numpadOpen ? 'Masquer le pavé' : 'Pavé numérique';
+}
+
+function setNumpadOpen(open, { persist = true } = {}) {
+  numpadOpen = Boolean(open);
+  updateNumpadToggleUi();
+
+  if (persist) {
+    try {
+      localStorage.setItem(NUMPAD_STORAGE_KEY, numpadOpen ? '1' : '0');
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  if (!numpadPanel) return;
+
+  if (!numpadOpen) {
+    numpadPanel.classList.remove('is-open');
+    numpadPanel.setAttribute('aria-hidden', 'true');
+    priceInput.classList.remove('is-numpad-active');
+    quantityInput.classList.remove('is-numpad-active');
+    window.setTimeout(() => {
+      if (!numpadOpen) numpadPanel.hidden = true;
+    }, 220);
+    return;
+  }
+
+  const active =
+    document.activeElement === priceInput ||
+    document.activeElement === quantityInput
+      ? document.activeElement
+      : numpadTarget || priceInput;
+  setNumpadTarget(active);
+
+  numpadPanel.hidden = false;
+  numpadPanel.setAttribute('aria-hidden', 'false');
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => numpadModal.classList.add('is-open'));
+    requestAnimationFrame(() => numpadPanel.classList.add('is-open'));
   });
 }
 
-function closeNumpadModal() {
-  if (!numpadModal) return;
-  numpadModal.classList.remove('is-open');
-  numpadModal.setAttribute('aria-hidden', 'true');
-  priceInput.classList.remove('is-numpad-active');
-  quantityInput.classList.remove('is-numpad-active');
-  window.setTimeout(() => {
-    numpadModal.hidden = true;
-  }, 260);
+function toggleNumpad() {
+  const next = !numpadOpen;
+  setNumpadOpen(next);
+  if (next) {
+    const active =
+      document.activeElement === priceInput ||
+      document.activeElement === quantityInput
+        ? document.activeElement
+        : priceInput;
+    setNumpadTarget(active);
+  }
+}
+
+function loadNumpadPreference() {
+  try {
+    return localStorage.getItem(NUMPAD_STORAGE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
 }
 
 function updateNumpadUi() {
@@ -263,7 +321,7 @@ function updateNumpadUi() {
 }
 
 function appendNumpadDigit(digit) {
-  if (!numpadTarget) return;
+  if (!numpadOpen || !numpadTarget) return;
 
   let value = numpadTarget.value || '';
 
@@ -280,17 +338,21 @@ function appendNumpadDigit(digit) {
   }
 
   numpadTarget.value = value;
+  numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
   updateNumpadPreview();
 }
 
 function numpadBackspace() {
-  if (!numpadTarget?.value) return;
+  if (!numpadOpen || !numpadTarget?.value) return;
   numpadTarget.value = numpadTarget.value.slice(0, -1);
+  numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
   updateNumpadPreview();
 }
 
 function numpadClear() {
-  if (numpadTarget) numpadTarget.value = '';
+  if (!numpadOpen || !numpadTarget) return;
+  numpadTarget.value = '';
+  numpadTarget.dispatchEvent(new Event('input', { bubbles: true }));
   updateNumpadPreview();
 }
 
@@ -298,20 +360,21 @@ function initNumpad() {
   if (!numpadEl) return;
 
   [priceInput, quantityInput].forEach((input) => {
-    input.addEventListener('click', (event) => {
-      event.preventDefault();
-      openNumpadModal(input);
+    input.addEventListener('focus', () => {
+      setNumpadTarget(input);
     });
-    input.addEventListener('focus', (event) => {
-      event.preventDefault();
-      input.blur();
-      openNumpadModal(input);
+    input.addEventListener('input', () => {
+      if (document.activeElement === input) {
+        setNumpadTarget(input);
+      }
+      updateNumpadPreview();
     });
   });
 
-  numpadClose?.addEventListener('click', closeNumpadModal);
-  numpadBackdrop?.addEventListener('click', closeNumpadModal);
-  numpadDone?.addEventListener('click', closeNumpadModal);
+  numpadToggle?.addEventListener('click', toggleNumpad);
+  numpadClose?.addEventListener('click', () => setNumpadOpen(false));
+
+  setNumpadOpen(loadNumpadPreference(), { persist: false });
 
   numpadEl.addEventListener('click', (event) => {
     const digitBtn = event.target.closest('[data-digit]');
@@ -380,7 +443,7 @@ function selectDraftLine(index) {
   quantityInput.value = String(line.quantity);
   updateAddLineButton();
   renderDraft();
-  openNumpadModal(priceInput);
+  priceInput.focus();
 }
 
 function updateAddLineButton() {
@@ -460,7 +523,6 @@ function startEdit(order) {
   quantityInput.value = '';
   updateAddLineButton();
   updateFormMode();
-  closeNumpadModal();
   setStatus('');
 }
 
@@ -545,7 +607,7 @@ function renderList(orders) {
 }
 
 function addLineToDraft() {
-  const price = priceInput.value.trim();
+  const price = priceInput.value.trim().replace(',', '.');
   const quantity = quantityInput.value.trim();
 
   if (price === '' || quantity === '') {
@@ -553,14 +615,20 @@ function addLineToDraft() {
     return;
   }
 
+  const parsedPrice = Number(price);
+  if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+    setStatus('Prix invalide.', 'error');
+    return;
+  }
+
   const parsedQty = Number(quantity);
-  if (parsedQty <= 0) {
-    setStatus('La quantité doit être supérieure à 0.', 'error');
+  if (!Number.isInteger(parsedQty) || parsedQty <= 0) {
+    setStatus('La quantité doit être un entier supérieur à 0.', 'error');
     return;
   }
 
   const line = {
-    price: Number(price),
+    price: parsedPrice,
     quantity: parsedQty,
   };
 
@@ -573,7 +641,6 @@ function addLineToDraft() {
 
   priceInput.value = '';
   quantityInput.value = '';
-  closeNumpadModal();
   updateAddLineButton();
   renderDraft();
   setStatus('');
@@ -611,7 +678,6 @@ async function submitOrder() {
     }
 
     resetForm();
-    closeNumpadModal();
     await fetchData();
     setStatus('');
     showToast(

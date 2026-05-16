@@ -1363,10 +1363,10 @@
             type="button"
             id="numpadToggle"
             class="theme-toggle"
-            aria-label="Afficher le pavé numérique"
-            aria-pressed="false"
+            aria-label="Masquer le pavé numérique"
+            aria-pressed="true"
             aria-controls="numpadPanel"
-            title="Pavé numérique"
+            title="Masquer le pavé"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="5" y="3" width="14" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.75" />
@@ -1405,6 +1405,7 @@
             inputmode="decimal"
             autocomplete="off"
             placeholder="0,00"
+            class="is-numpad-active"
           />
 
           <label for="quantity">Quantité</label>
@@ -1413,13 +1414,13 @@
             type="text"
             inputmode="numeric"
             autocomplete="off"
-            placeholder="0"
+            placeholder="1"
           />
 
               <button type="button" id="addLineBtn">Ajouter</button>
             </div>
 
-            <aside id="numpadPanel" class="numpad-panel" hidden aria-hidden="true">
+            <aside id="numpadPanel" class="numpad-panel is-open" aria-hidden="false">
               <div class="numpad-panel-inner" id="numpad" role="dialog" aria-modal="false" aria-labelledby="numpadTitle" aria-label="Pavé numérique">
                 <div class="numpad-header">
                   <div>

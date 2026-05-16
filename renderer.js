@@ -61,6 +61,7 @@ const THEME_STORAGE_KEY = 'caisse-theme';
 const NUMPAD_STORAGE_KEY = 'caisse-numpad-open';
 
 let numpadOpen = false;
+let quantityReplaceOnNextInput = false;
 
 function setStatus(message, type = '') {
   statusEl.textContent = message;
@@ -303,9 +304,11 @@ function toggleNumpad() {
 
 function loadNumpadPreference() {
   try {
-    return localStorage.getItem(NUMPAD_STORAGE_KEY) === '1';
+    const stored = localStorage.getItem(NUMPAD_STORAGE_KEY);
+    if (stored === null) return true;
+    return stored === '1';
   } catch (_) {
-    return false;
+    return true;
   }
 }
 
@@ -329,12 +332,17 @@ function appendNumpadDigit(digit) {
     if (numpadTarget !== priceInput) return;
     if (value.includes('.')) return;
     value = value ? `${value}.` : '0.';
-  } else {
-    if (value === '0' && numpadTarget === quantityInput) {
+  } else if (numpadTarget === quantityInput) {
+    if (quantityReplaceOnNextInput || value === '') {
+      value = digit;
+      quantityReplaceOnNextInput = false;
+    } else if (value === '0') {
       value = digit;
     } else {
       value += digit;
     }
+  } else {
+    value += digit;
   }
 
   numpadTarget.value = value;
@@ -431,6 +439,7 @@ function clearLineEdit() {
   editingLineIndex = null;
   priceInput.value = '';
   quantityInput.value = '';
+  quantityReplaceOnNextInput = false;
   updateAddLineButton();
 }
 
@@ -441,6 +450,7 @@ function selectDraftLine(index) {
   editingLineIndex = index;
   priceInput.value = String(line.price);
   quantityInput.value = String(line.quantity);
+  quantityReplaceOnNextInput = false;
   updateAddLineButton();
   renderDraft();
   priceInput.focus();
@@ -500,8 +510,75 @@ function resetForm() {
   draftLines = [];
   priceInput.value = '';
   quantityInput.value = '';
+  quantityReplaceOnNextInput = false;
   updateAddLineButton();
   updateFormMode();
+}
+
+function syncDefaultQuantityFromPrice() {
+  const price = priceInput.value.trim().replace(',', '.');
+  if (price === '' || price === '.') {
+    if (quantityReplaceOnNextInput) {
+      quantityInput.value = '';
+      quantityReplaceOnNextInput = false;
+    }
+    return;
+  }
+  if (editingLineIndex != null) return;
+
+  const qty = quantityInput.value.trim();
+  if (qty === '' || quantityReplaceOnNextInput) {
+    quantityInput.value = '1';
+    quantityReplaceOnNextInput = true;
+  }
+}
+
+function prepareQuantityForEntry() {
+  if (!quantityReplaceOnNextInput) return;
+  quantityInput.value = '';
+  quantityInput.select();
+}
+
+function restoreDefaultQuantityIfEmpty() {
+  if (!quantityReplaceOnNextInput) return;
+  if (quantityInput.value.trim() !== '') return;
+
+  const price = priceInput.value.trim().replace(',', '.');
+  if (price && price !== '.') {
+    quantityInput.value = '1';
+  }
+}
+
+function initSaleEntryInputs() {
+  priceInput?.addEventListener('input', () => {
+    syncDefaultQuantityFromPrice();
+    updateNumpadPreview();
+  });
+
+  quantityInput?.addEventListener('focus', () => {
+    prepareQuantityForEntry();
+  });
+
+  quantityInput?.addEventListener('blur', () => {
+    restoreDefaultQuantityIfEmpty();
+  });
+
+  quantityInput?.addEventListener('input', () => {
+    if (quantityInput.value.trim() !== '') {
+      quantityReplaceOnNextInput = false;
+    }
+    updateNumpadPreview();
+  });
+
+  quantityInput?.addEventListener('keydown', (event) => {
+    if (!quantityReplaceOnNextInput) return;
+    if (event.key.length !== 1 || !/^\d$/.test(event.key)) return;
+    event.preventDefault();
+    quantityInput.value = event.key;
+    quantityReplaceOnNextInput = false;
+    quantityInput.dispatchEvent(new Event('input', { bubbles: true }));
+    updateNumpadPreview();
+  });
 }
 
 function toggleOrderDetails(id) {
@@ -521,6 +598,7 @@ function startEdit(order) {
   editingLineIndex = null;
   priceInput.value = '';
   quantityInput.value = '';
+  quantityReplaceOnNextInput = false;
   updateAddLineButton();
   updateFormMode();
   setStatus('');
@@ -641,6 +719,7 @@ function addLineToDraft() {
 
   priceInput.value = '';
   quantityInput.value = '';
+  quantityReplaceOnNextInput = false;
   updateAddLineButton();
   renderDraft();
   setStatus('');
@@ -912,6 +991,7 @@ async function initAppVersion() {
 
 initAppVersion();
 
+initSaleEntryInputs();
 initNumpad();
 updateThemeToggleUi(getTheme());
 updatePeriodUi();

@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
-const { initAutoUpdater } = require('./updater');
+const { setupUpdaterIpc, attachMainWindow } = require('./updater');
 
 let mainWindow = null;
 
@@ -11,6 +11,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 500,
     backgroundColor: '#f5f4f1',
+    show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -18,18 +19,23 @@ function createWindow() {
     },
   });
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    initAutoUpdater(mainWindow, { ipcMain });
+  attachMainWindow(mainWindow);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    attachMainWindow(null);
   });
 }
 
 app.whenReady().then(() => {
+  setupUpdaterIpc(ipcMain);
   Menu.setApplicationMenu(null);
   createWindow();
 

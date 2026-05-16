@@ -245,14 +245,25 @@
   });
 
   async function boot() {
-    currentVersion = (await updater.getVersion()) || '';
+    try {
+      currentVersion = (await updater.getVersion()) || '';
+    } catch (error) {
+      console.error('Failed to read app version:', error);
+    }
+
     if (appVersionEl) {
       appVersionEl.textContent = currentVersion ? `v${currentVersion}` : '';
     }
 
     updater.onStatus(handleUpdateStatus);
 
-    const packaged = await updater.isPackaged();
+    let packaged = false;
+    try {
+      packaged = await updater.isPackaged();
+    } catch (error) {
+      console.error('Failed to read packaged state:', error);
+    }
+
     if (checkUpdatesBtn) {
       checkUpdatesBtn.hidden = false;
       checkUpdatesBtn.title = packaged
@@ -261,11 +272,24 @@
     }
 
     if (updater.notifyReady) {
-      await updater.notifyReady();
+      try {
+        await updater.notifyReady();
+      } catch (error) {
+        console.error('Startup update notify failed:', error);
+        if (window.caisseShowToast) {
+          window.caisseShowToast({
+            title: 'Mises à jour',
+            message: String(error?.message || error),
+            type: 'error',
+          });
+        }
+      }
     }
-
-    /* Startup check + native dialog handled in main process (updater-renderer-ready). */
   }
 
-  boot();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => boot());
+  } else {
+    boot();
+  }
 })();

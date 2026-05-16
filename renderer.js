@@ -891,8 +891,10 @@ function setAppVersionLabel(version) {
   const appVersionEl = document.getElementById('appVersion');
   if (!appVersionEl) return;
   const label = formatAppVersionLabel(version);
+  if (!label) return;
   appVersionEl.textContent = label;
-  appVersionEl.hidden = !label;
+  appVersionEl.hidden = false;
+  appVersionEl.removeAttribute('hidden');
 }
 
 async function initAppVersion() {

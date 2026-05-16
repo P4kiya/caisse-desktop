@@ -4,6 +4,24 @@ const { setupUpdaterIpc, attachMainWindow } = require('./updater');
 
 let mainWindow = null;
 
+function injectAppVersionIntoPage() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const version = String(app.getVersion() || '').trim();
+  if (!version) return;
+
+  const label = version.replace(/^v/i, '');
+  const script = `(() => {
+    const el = document.getElementById('appVersion');
+    if (!el) return;
+    el.textContent = 'v${label}';
+    el.hidden = false;
+    el.removeAttribute('hidden');
+  })();`;
+
+  mainWindow.webContents.executeJavaScript(script).catch(() => {});
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -26,6 +44,7 @@ function createWindow() {
     mainWindow.focus();
   });
 
+  mainWindow.webContents.on('did-finish-load', injectAppVersionIntoPage);
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.on('closed', () => {

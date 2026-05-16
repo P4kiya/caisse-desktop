@@ -110,6 +110,10 @@
       }
 
       .app-header h1 {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
         margin: 0;
         font-size: 1.25rem;
         font-weight: 600;
@@ -117,16 +121,22 @@
       }
 
       .app-version {
-        display: inline-block;
-        margin-left: 10px;
-        padding: 2px 8px;
+        display: inline-flex;
+        align-items: center;
+        min-width: 3.25rem;
+        min-height: 1.5rem;
+        padding: 3px 10px;
         border-radius: 999px;
-        font-size: 0.8rem;
-        font-weight: 600;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
         color: var(--primary);
         background: var(--primary-soft);
-        border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
-        vertical-align: middle;
+        border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+      }
+
+      .app-version:empty {
+        display: none;
       }
 
       .theme-toggle {

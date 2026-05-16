@@ -2,15 +2,34 @@ const { app } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 
-const CHECK_DELAY_MS = 4000;
+const CHECK_AFTER_LOAD_MS = 1500;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 let mainWindow = null;
+let checkScheduled = false;
 
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, payload);
   }
+}
+
+function runUpdateCheck() {
+  return autoUpdater.checkForUpdates().catch((error) => {
+    log.warn('Update check failed:', error?.message || error);
+  });
+}
+
+function scheduleUpdateCheck() {
+  if (checkScheduled || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  checkScheduled = true;
+  setTimeout(() => {
+    checkScheduled = false;
+    runUpdateCheck();
+  }, CHECK_AFTER_LOAD_MS);
 }
 
 function initAutoUpdater(win, { ipcMain }) {
@@ -34,6 +53,7 @@ function initAutoUpdater(win, { ipcMain }) {
   });
 
   autoUpdater.on('update-available', (info) => {
+    log.info('Update available:', info.version);
     send('update-available', {
       version: info.version,
       releaseNotes: info.releaseNotes,
@@ -42,10 +62,12 @@ function initAutoUpdater(win, { ipcMain }) {
   });
 
   autoUpdater.on('update-not-available', (info) => {
+    log.info('Update not available. Current:', app.getVersion(), 'Latest:', info?.version);
     send('update-not-available', { version: info?.version });
   });
 
   autoUpdater.on('error', (error) => {
+    log.error('Auto-updater error:', error?.message || error);
     send('update-error', { message: error?.message || String(error) });
   });
 
@@ -90,14 +112,8 @@ function initAutoUpdater(win, { ipcMain }) {
   ipcMain.handle('app-get-version', () => app.getVersion());
   ipcMain.handle('app-is-packaged', () => app.isPackaged);
 
-  const runCheck = () => {
-    autoUpdater.checkForUpdates().catch((error) => {
-      log.warn('Update check failed:', error?.message || error);
-    });
-  };
-
-  setTimeout(runCheck, CHECK_DELAY_MS);
-  setInterval(runCheck, CHECK_INTERVAL_MS);
+  win.webContents.once('did-finish-load', scheduleUpdateCheck);
+  setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
 }
 
-module.exports = { initAutoUpdater };
+module.exports = { initAutoUpdater, scheduleUpdateCheck };

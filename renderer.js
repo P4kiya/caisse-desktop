@@ -46,7 +46,12 @@ const confirmOkBtn = document.getElementById('confirmOkBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const confirmBackdrop = confirmModal?.querySelector('.confirm-backdrop');
 const themeToggle = document.getElementById('themeToggle');
+const numpadModal = document.getElementById('numpadModal');
 const numpadEl = document.getElementById('numpad');
+const numpadBackdrop = document.getElementById('numpadBackdrop');
+const numpadClose = document.getElementById('numpadClose');
+const numpadDone = document.getElementById('numpadDone');
+const numpadPreview = document.getElementById('numpadPreview');
 const numpadTargetHint = document.getElementById('numpadTargetHint');
 const numpadDecimalBtn = document.getElementById('numpadDecimal');
 
@@ -217,6 +222,33 @@ function setNumpadTarget(input) {
   priceInput.classList.toggle('is-numpad-active', input === priceInput);
   quantityInput.classList.toggle('is-numpad-active', input === quantityInput);
   updateNumpadUi();
+  updateNumpadPreview();
+}
+
+function updateNumpadPreview() {
+  if (!numpadPreview || !numpadTarget) return;
+  numpadPreview.textContent = numpadTarget.value || '';
+}
+
+function openNumpadModal(input) {
+  if (!numpadModal) return;
+  setNumpadTarget(input);
+  numpadModal.hidden = false;
+  numpadModal.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => numpadModal.classList.add('is-open'));
+  });
+}
+
+function closeNumpadModal() {
+  if (!numpadModal) return;
+  numpadModal.classList.remove('is-open');
+  numpadModal.setAttribute('aria-hidden', 'true');
+  priceInput.classList.remove('is-numpad-active');
+  quantityInput.classList.remove('is-numpad-active');
+  window.setTimeout(() => {
+    numpadModal.hidden = true;
+  }, 260);
 }
 
 function updateNumpadUi() {
@@ -248,26 +280,38 @@ function appendNumpadDigit(digit) {
   }
 
   numpadTarget.value = value;
+  updateNumpadPreview();
 }
 
 function numpadBackspace() {
   if (!numpadTarget?.value) return;
   numpadTarget.value = numpadTarget.value.slice(0, -1);
+  updateNumpadPreview();
 }
 
 function numpadClear() {
   if (numpadTarget) numpadTarget.value = '';
+  updateNumpadPreview();
 }
 
 function initNumpad() {
   if (!numpadEl) return;
 
-  setNumpadTarget(priceInput);
-
   [priceInput, quantityInput].forEach((input) => {
-    input.addEventListener('focus', () => setNumpadTarget(input));
-    input.addEventListener('click', () => setNumpadTarget(input));
+    input.addEventListener('click', (event) => {
+      event.preventDefault();
+      openNumpadModal(input);
+    });
+    input.addEventListener('focus', (event) => {
+      event.preventDefault();
+      input.blur();
+      openNumpadModal(input);
+    });
   });
+
+  numpadClose?.addEventListener('click', closeNumpadModal);
+  numpadBackdrop?.addEventListener('click', closeNumpadModal);
+  numpadDone?.addEventListener('click', closeNumpadModal);
 
   numpadEl.addEventListener('click', (event) => {
     const digitBtn = event.target.closest('[data-digit]');
@@ -336,8 +380,7 @@ function selectDraftLine(index) {
   quantityInput.value = String(line.quantity);
   updateAddLineButton();
   renderDraft();
-  priceInput.focus();
-  priceInput.select();
+  openNumpadModal(priceInput);
 }
 
 function updateAddLineButton() {
@@ -417,7 +460,7 @@ function startEdit(order) {
   quantityInput.value = '';
   updateAddLineButton();
   updateFormMode();
-  priceInput.focus();
+  closeNumpadModal();
   setStatus('');
 }
 
@@ -530,9 +573,9 @@ function addLineToDraft() {
 
   priceInput.value = '';
   quantityInput.value = '';
+  closeNumpadModal();
   updateAddLineButton();
   renderDraft();
-  priceInput.focus();
   setStatus('');
 }
 
@@ -568,7 +611,7 @@ async function submitOrder() {
     }
 
     resetForm();
-    priceInput.focus();
+    closeNumpadModal();
     await fetchData();
     setStatus('');
     showToast(

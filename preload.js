@@ -16,6 +16,23 @@ const UPDATE_CHANNELS = [
   'update-downloaded',
 ];
 
+const pendingUpdateEvents = [];
+let updateStatusCallback = null;
+
+function dispatchUpdateEvent(channel, payload) {
+  if (updateStatusCallback) {
+    updateStatusCallback(channel, payload);
+  } else {
+    pendingUpdateEvents.push({ channel, payload });
+  }
+}
+
+UPDATE_CHANNELS.forEach((channel) => {
+  ipcRenderer.on(channel, (_event, payload) => {
+    dispatchUpdateEvent(channel, payload);
+  });
+});
+
 contextBridge.exposeInMainWorld('caisseConfig', {
   apiBaseUrl,
 });
@@ -27,10 +44,8 @@ contextBridge.exposeInMainWorld('caisseUpdater', {
   getVersion: () => ipcRenderer.invoke('app-get-version'),
   isPackaged: () => ipcRenderer.invoke('app-is-packaged'),
   onStatus: (callback) => {
-    UPDATE_CHANNELS.forEach((channel) => {
-      ipcRenderer.on(channel, (_event, payload) => {
-        callback(channel, payload);
-      });
-    });
+    updateStatusCallback = callback;
+    const queued = pendingUpdateEvents.splice(0);
+    queued.forEach(({ channel, payload }) => callback(channel, payload));
   },
 });

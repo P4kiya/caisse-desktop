@@ -103,6 +103,12 @@
         gap: 16px;
       }
 
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
       .app-header h1 {
         margin: 0;
         font-size: 1.25rem;
@@ -275,34 +281,137 @@
         box-shadow: 0 0 0 3px var(--focus-ring);
       }
 
-      .numpad {
-        margin-bottom: 18px;
+      input.numpad-field {
+        cursor: pointer;
+        caret-color: transparent;
+      }
+
+      .numpad-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 16px;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+      }
+
+      .numpad-modal[hidden] {
+        display: none;
+      }
+
+      .numpad-modal.is-open {
+        opacity: 1;
+      }
+
+      .numpad-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--overlay);
+        backdrop-filter: blur(4px);
+      }
+
+      .numpad-dialog {
+        position: relative;
+        z-index: 1;
+        width: min(360px, 100%);
+        padding: 18px 18px 16px;
+        border-radius: 16px 16px 12px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md), var(--shadow-lg);
+        transform: translateY(24px);
+        transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .numpad-modal.is-open .numpad-dialog {
+        transform: translateY(0);
       }
 
       .numpad-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+        gap: 12px;
       }
 
       .numpad-header .numpad-label {
         margin: 0;
+        font-size: 0.95rem;
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .numpad-target-hint {
         font-size: 0.8rem;
         color: var(--text-muted);
         font-weight: 500;
       }
 
-      .numpad-target-hint {
-        font-size: 0.75rem;
-        color: var(--primary);
+      .numpad-close {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .numpad-close:hover {
+        background: var(--border);
+        color: var(--text);
+      }
+
+      .numpad-preview {
+        margin: 0 0 12px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: var(--surface-muted);
+        border: 1px solid var(--border);
+        font-size: 1.35rem;
         font-weight: 600;
+        text-align: right;
+        color: var(--text);
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .numpad-preview:empty::before {
+        content: '0';
+        color: var(--text-soft);
       }
 
       .numpad-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 8px;
+      }
+
+      .numpad-done {
+        width: 100%;
+        margin-top: 12px;
+        padding: 12px 16px;
+        border: none;
+        border-radius: 8px;
+        background: var(--primary);
+        color: var(--on-primary);
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: var(--btn-primary-shadow);
+      }
+
+      .numpad-done:hover {
+        background: var(--primary-hover);
       }
 
       .numpad-btn {
@@ -1173,13 +1282,27 @@
     <header class="app-header">
       <div class="app-header-inner">
         <h1>Caisse</h1>
-        <button
-          type="button"
-          id="themeToggle"
-          class="theme-toggle"
-          aria-label="Activer le mode sombre"
-          title="Mode sombre"
-        >
+        <div class="header-actions">
+          <button
+            type="button"
+            id="checkUpdatesBtn"
+            class="theme-toggle"
+            hidden
+            aria-label="Vérifier les mises à jour"
+            title="Vérifier les mises à jour"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            id="themeToggle"
+            class="theme-toggle"
+            aria-label="Activer le mode sombre"
+            title="Mode sombre"
+          >
           <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="4" />
             <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
@@ -1188,6 +1311,7 @@
             <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z" />
           </svg>
         </button>
+        </div>
       </div>
     </header>
 
@@ -1196,33 +1320,28 @@
         <div class="panel-left-body">
           <h2 id="formTitle">Nouvelle vente</h2>
           <label for="price">Prix</label>
-          <input id="price" type="number" step="0.01" min="0" placeholder="0,00" inputmode="decimal" />
+          <input
+            id="price"
+            class="numpad-field"
+            type="text"
+            inputmode="none"
+            readonly
+            placeholder="0,00"
+            aria-haspopup="dialog"
+          />
 
           <label for="quantity">Quantité</label>
-          <input id="quantity" type="number" step="1" min="0" placeholder="0" inputmode="numeric" />
+          <input
+            id="quantity"
+            class="numpad-field"
+            type="text"
+            inputmode="none"
+            readonly
+            placeholder="0"
+            aria-haspopup="dialog"
+          />
 
-          <div class="numpad" id="numpad" aria-label="Pavé numérique">
-            <div class="numpad-header">
-              <span class="numpad-label">Pavé numérique</span>
-              <span class="numpad-target-hint" id="numpadTargetHint">Prix</span>
-            </div>
-            <div class="numpad-grid">
-              <button type="button" class="numpad-btn" data-digit="7">7</button>
-              <button type="button" class="numpad-btn" data-digit="8">8</button>
-              <button type="button" class="numpad-btn" data-digit="9">9</button>
-              <button type="button" class="numpad-btn" data-digit="4">4</button>
-              <button type="button" class="numpad-btn" data-digit="5">5</button>
-              <button type="button" class="numpad-btn" data-digit="6">6</button>
-              <button type="button" class="numpad-btn" data-digit="1">1</button>
-              <button type="button" class="numpad-btn" data-digit="2">2</button>
-              <button type="button" class="numpad-btn" data-digit="3">3</button>
-              <button type="button" class="numpad-btn numpad-btn-action" data-numpad="decimal" id="numpadDecimal">,</button>
-              <button type="button" class="numpad-btn" data-digit="0">0</button>
-              <button type="button" class="numpad-btn numpad-btn-action" data-numpad="backspace" aria-label="Effacer">⌫</button>
-              <button type="button" class="numpad-btn numpad-btn-action numpad-btn-wide" data-numpad="clear">Effacer tout</button>
-            </div>
-          </div>
-
+          
           <button type="button" id="addLineBtn">Ajouter</button>
 
           <div class="draft-box is-empty" id="draftBox">
@@ -1358,6 +1477,48 @@
             Redémarrer
           </button>
         </div>
+      </div>
+    </div>
+
+        <div
+      id="numpadModal"
+      class="numpad-modal"
+      hidden
+      aria-hidden="true"
+    >
+      <div class="numpad-backdrop" id="numpadBackdrop"></div>
+      <div
+        class="numpad-dialog"
+        id="numpad"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="numpadTitle"
+        aria-label="Pavé numérique"
+      >
+        <div class="numpad-header">
+          <div>
+            <p class="numpad-label" id="numpadTitle">Saisie</p>
+            <span class="numpad-target-hint" id="numpadTargetHint">Prix</span>
+          </div>
+          <button type="button" class="numpad-close" id="numpadClose" aria-label="Fermer">×</button>
+        </div>
+        <p class="numpad-preview" id="numpadPreview"></p>
+        <div class="numpad-grid">
+          <button type="button" class="numpad-btn" data-digit="7">7</button>
+          <button type="button" class="numpad-btn" data-digit="8">8</button>
+          <button type="button" class="numpad-btn" data-digit="9">9</button>
+          <button type="button" class="numpad-btn" data-digit="4">4</button>
+          <button type="button" class="numpad-btn" data-digit="5">5</button>
+          <button type="button" class="numpad-btn" data-digit="6">6</button>
+          <button type="button" class="numpad-btn" data-digit="1">1</button>
+          <button type="button" class="numpad-btn" data-digit="2">2</button>
+          <button type="button" class="numpad-btn" data-digit="3">3</button>
+          <button type="button" class="numpad-btn numpad-btn-action" data-numpad="decimal" id="numpadDecimal">,</button>
+          <button type="button" class="numpad-btn" data-digit="0">0</button>
+          <button type="button" class="numpad-btn numpad-btn-action" data-numpad="backspace" aria-label="Effacer">⌫</button>
+          <button type="button" class="numpad-btn numpad-btn-action numpad-btn-wide" data-numpad="clear">Effacer tout</button>
+        </div>
+        <button type="button" class="numpad-done" id="numpadDone">Valider</button>
       </div>
     </div>
 

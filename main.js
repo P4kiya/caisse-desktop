@@ -18,9 +18,11 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.webContents.on('did-finish-load', () => {
+    initAutoUpdater(mainWindow, { ipcMain });
+  });
 
-  initAutoUpdater(mainWindow, { ipcMain });
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;

@@ -879,6 +879,9 @@ cancelBtn.addEventListener('click', resetForm);
 fetchBtn.addEventListener('click', fetchData);
 themeToggle?.addEventListener('click', toggleTheme);
 
+window.caisseShowToast = showToast;
+window.caisseSetStatus = setStatus;
+
 initNumpad();
 updateThemeToggleUi(getTheme());
 updatePeriodUi();

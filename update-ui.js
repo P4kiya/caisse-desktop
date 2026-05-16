@@ -228,13 +228,17 @@
     checkUpdatesBtn.disabled = true;
 
     try {
-      const result = await updater.check();
-      applyCheckResult(result, { showIfUpToDate: true });
+      const result = await updater.check({ interactive: true });
+      applyCheckResult(result, { showIfUpToDate: false });
     } catch (error) {
       const msg =
         error?.message ||
         'Impossible de vérifier les mises à jour pour le moment.';
-      showInfoDialog(msg, { title: 'Erreur' });
+      if (window.caisseShowToast) {
+        window.caisseShowToast({ title: 'Erreur', message: msg, type: 'error' });
+      } else {
+        showInfoDialog(msg, { title: 'Erreur' });
+      }
     } finally {
       checkUpdatesBtn.disabled = false;
     }
@@ -260,14 +264,7 @@
       await updater.notifyReady();
     }
 
-    if (packaged) {
-      try {
-        const result = await updater.check();
-        applyCheckResult(result, { showIfUpToDate: false });
-      } catch (error) {
-        console.warn('Startup update check failed:', error);
-      }
-    }
+    /* Startup check + native dialog handled in main process (updater-renderer-ready). */
   }
 
   boot();

@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld('caisseConfig', {
 });
 
 contextBridge.exposeInMainWorld('caisseUpdater', {
-  check: () => ipcRenderer.invoke('update-check'),
+  check: (options) => ipcRenderer.invoke('update-check', options),
   download: () => ipcRenderer.invoke('update-download'),
   install: () => ipcRenderer.invoke('update-install'),
   getVersion: () => ipcRenderer.invoke('app-get-version'),

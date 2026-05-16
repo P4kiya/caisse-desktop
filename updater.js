@@ -1,4 +1,4 @@
-const { app } = require('electron');
+const { app, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 
@@ -7,6 +7,7 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 let mainWindow = null;
 let rendererReady = false;
 let checkInFlight = null;
+let startupPromptDone = false;
 
 function compareVersions(left, right) {
   const parse = (value) =>
@@ -53,6 +54,84 @@ function send(channel, payload) {
   }
 }
 
+async function promptDownloadedInstall(version) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Mise à jour prête',
+    message: `La version ${version || ''} est prête à être installée.`,
+    detail: 'Redémarrez l’application pour terminer la mise à jour.',
+    buttons: ['Redémarrer', 'Plus tard'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+
+  if (response === 0) {
+    autoUpdater.quitAndInstall(false, true);
+  }
+}
+
+async function promptUpdateAvailable(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Mise à jour disponible',
+    message: `La version ${payload.latestVersion} est disponible.`,
+    detail: `Vous utilisez actuellement la version ${payload.currentVersion}.`,
+    buttons: ['Télécharger', 'Plus tard'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+
+  if (response !== 0) return;
+
+  try {
+    send('update-download-progress', { percent: 0 });
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    const message = error?.message || String(error);
+    log.error('Download failed:', message);
+    send('update-error', { message });
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'Échec du téléchargement',
+      message,
+      buttons: ['OK'],
+      noLink: true,
+    });
+  }
+}
+
+async function promptUpToDate(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'À jour',
+    message: 'Vous utilisez déjà la dernière version disponible.',
+    detail: `Version installée : ${payload.currentVersion}`,
+    buttons: ['OK'],
+    noLink: true,
+  });
+}
+
+async function promptDevMode() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  await dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Mises à jour',
+    message: 'Les mises à jour automatiques ne fonctionnent qu’avec l’application installée (.exe).',
+    detail: 'Lancez « Caisse Setup » depuis le menu Démarrer, pas npm run dev.',
+    buttons: ['OK'],
+    noLink: true,
+  });
+}
+
 async function performUpdateCheck() {
   if (checkInFlight) {
     return checkInFlight;
@@ -73,17 +152,6 @@ async function performUpdateCheck() {
         payload.updateAvailable,
       );
       send('update-check-result', payload);
-
-      if (payload.updateAvailable) {
-        send('update-available', {
-          version: payload.latestVersion,
-          releaseNotes: payload.releaseNotes,
-          releaseDate: payload.releaseDate,
-        });
-      } else {
-        send('update-not-available', { version: payload.latestVersion });
-      }
-
       return payload;
     } catch (error) {
       const message = error?.message || String(error);
@@ -104,17 +172,25 @@ function registerBaseIpc(ipcMain) {
 }
 
 function registerDevUpdateIpc(ipcMain) {
-  ipcMain.handle('update-check', async () => ({
-    currentVersion: app.getVersion(),
-    latestVersion: app.getVersion(),
-    updateAvailable: false,
-    devMode: true,
-  }));
+  ipcMain.handle('update-check', async (_event, options = {}) => {
+    const payload = {
+      currentVersion: app.getVersion(),
+      latestVersion: app.getVersion(),
+      updateAvailable: false,
+      devMode: true,
+    };
+
+    if (options.interactive) {
+      await promptDevMode();
+    }
+
+    return payload;
+  });
   ipcMain.handle('update-download', async () => {
     throw new Error('Mises à jour indisponibles en mode développement.');
   });
   ipcMain.handle('update-install', () => {});
-  ipcMain.handle('updater-renderer-ready', () => {
+  ipcMain.handle('updater-renderer-ready', async () => {
     rendererReady = true;
     return null;
   });
@@ -138,28 +214,6 @@ function initAutoUpdater(win, { ipcMain }) {
     autoUpdater.verifyUpdateCodeSignature = false;
   }
 
-  autoUpdater.on('checking-for-update', () => {
-    send('update-checking');
-  });
-
-  autoUpdater.on('update-available', (info) => {
-    log.info('Update available event:', info.version);
-  });
-
-  autoUpdater.on('update-not-available', (info) => {
-    log.info(
-      'Update not available event. Current:',
-      app.getVersion(),
-      'Latest:',
-      info?.version,
-    );
-  });
-
-  autoUpdater.on('error', (error) => {
-    log.error('Auto-updater error:', error?.message || error);
-    send('update-error', { message: error?.message || String(error) });
-  });
-
   autoUpdater.on('download-progress', (progress) => {
     send('update-download-progress', {
       percent: progress.percent,
@@ -174,9 +228,42 @@ function initAutoUpdater(win, { ipcMain }) {
       version: info.version,
       releaseNotes: info.releaseNotes,
     });
+    promptDownloadedInstall(info.version).catch((error) => {
+      log.error('Install prompt failed:', error?.message || error);
+    });
   });
 
-  ipcMain.handle('update-check', () => performUpdateCheck());
+  autoUpdater.on('error', (error) => {
+    log.error('Auto-updater error:', error?.message || error);
+    send('update-error', { message: error?.message || String(error) });
+  });
+
+  ipcMain.handle('update-check', async (_event, options = {}) => {
+    try {
+      const payload = await performUpdateCheck();
+
+      if (options.interactive) {
+        if (payload.updateAvailable) {
+          await promptUpdateAvailable(payload);
+        } else {
+          await promptUpToDate(payload);
+        }
+      }
+
+      return payload;
+    } catch (error) {
+      if (options.interactive && mainWindow && !mainWindow.isDestroyed()) {
+        await dialog.showMessageBox(mainWindow, {
+          type: 'error',
+          title: 'Erreur de mise à jour',
+          message: error?.message || String(error),
+          buttons: ['OK'],
+          noLink: true,
+        });
+      }
+      throw error;
+    }
+  });
 
   ipcMain.handle('update-download', async () => {
     try {
@@ -191,9 +278,20 @@ function initAutoUpdater(win, { ipcMain }) {
     autoUpdater.quitAndInstall(false, true);
   });
 
-  ipcMain.handle('updater-renderer-ready', () => {
+  ipcMain.handle('updater-renderer-ready', async () => {
     rendererReady = true;
-    return null;
+
+    try {
+      const payload = await performUpdateCheck();
+      if (payload.updateAvailable && !startupPromptDone) {
+        startupPromptDone = true;
+        await promptUpdateAvailable(payload);
+      }
+      return payload;
+    } catch (error) {
+      log.warn('Startup update check failed:', error?.message || error);
+      return null;
+    }
   });
 
   setInterval(() => {

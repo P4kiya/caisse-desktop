@@ -145,8 +145,9 @@ function configureAutoUpdater() {
   }
 
   autoUpdater.setFeedURL({
-    provider: 'generic',
-    url: UPDATE_FEED_URL,
+    provider: 'github',
+    owner: 'P4kiya',
+    repo: 'caisse-desktop',
   });
 
   log.info('Auto-updater feed:', UPDATE_FEED_URL);

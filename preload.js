@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('caisseUpdater', {
   install: () => ipcRenderer.invoke('update-install'),
   getVersion: () => ipcRenderer.invoke('app-get-version'),
   isPackaged: () => ipcRenderer.invoke('app-is-packaged'),
+  notifyReady: () => ipcRenderer.invoke('updater-renderer-ready'),
   onStatus: (callback) => {
     updateStatusCallback = callback;
     const queued = pendingUpdateEvents.splice(0);

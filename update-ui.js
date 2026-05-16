@@ -15,12 +15,39 @@
   const laterReadyBtn = document.getElementById('updateLaterReadyBtn');
   const installBtn = document.getElementById('updateInstallBtn');
   const checkUpdatesBtn = document.getElementById('checkUpdatesBtn');
+  const appVersionEl = document.getElementById('appVersion');
   const backdrop = modal?.querySelector('.update-backdrop');
 
   if (!modal) return;
 
   let currentVersion = '';
   let manualCheck = false;
+
+  function parseVersionParts(value) {
+    return String(value || '')
+      .trim()
+      .replace(/^v/i, '')
+      .split('.')
+      .map((part) => Number.parseInt(part, 10) || 0);
+  }
+
+  function isNewerVersion(nextVersion) {
+    if (!nextVersion) return false;
+    if (!currentVersion) return true;
+
+    const next = parseVersionParts(nextVersion);
+    const current = parseVersionParts(currentVersion);
+    const length = Math.max(next.length, current.length);
+
+    for (let i = 0; i < length; i += 1) {
+      const nextPart = next[i] || 0;
+      const currentPart = current[i] || 0;
+      if (nextPart > currentPart) return true;
+      if (nextPart < currentPart) return false;
+    }
+
+    return false;
+  }
 
   function openModal() {
     modal.hidden = false;
@@ -33,6 +60,7 @@
   function closeModal() {
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
+    laterBtn.hidden = false;
     window.setTimeout(() => {
       modal.hidden = true;
     }, 260);
@@ -72,6 +100,7 @@
     downloadBtn.textContent = 'Télécharger';
     downloadBtn.disabled = false;
     laterBtn.disabled = false;
+    laterBtn.hidden = false;
     openModal();
   }
 
@@ -92,7 +121,7 @@
     openModal();
   }
 
-  function showManualResult(title, message) {
+  function showInfoDialog(message) {
     versionEl.textContent = currentVersion ? `v${currentVersion}` : '';
     messageEl.textContent = message;
     setView('available');
@@ -101,21 +130,16 @@
     laterBtn.hidden = true;
     openModal();
 
-    const closeManual = () => {
+    const closeInfo = () => {
       laterBtn.hidden = false;
       downloadBtn.textContent = 'Télécharger';
-      downloadBtn.removeEventListener('click', closeManual);
+      downloadBtn.removeEventListener('click', closeInfo);
       closeModal();
     };
-    downloadBtn.addEventListener('click', closeManual);
+    downloadBtn.addEventListener('click', closeInfo);
   }
 
-  function isNewerVersion(nextVersion) {
-    if (!nextVersion || !currentVersion) return Boolean(nextVersion);
-    return nextVersion !== currentVersion;
-  }
-
-  updater.onStatus((channel, payload) => {
+  function handleUpdateStatus(channel, payload) {
     switch (channel) {
       case 'update-available':
         if (!isNewerVersion(payload?.version)) return;
@@ -132,39 +156,28 @@
       case 'update-not-available':
         if (manualCheck) {
           manualCheck = false;
-          showManualResult(
-            'À jour',
-            'Vous utilisez déjà la dernière version disponible.',
+          showInfoDialog('Vous utilisez déjà la dernière version disponible.');
+        }
+        break;
+      case 'update-error': {
+        const msg =
+          payload?.message ||
+          'Impossible de vérifier les mises à jour pour le moment.';
+        if (!manualCheck) return;
+        manualCheck = false;
+        if (msg.includes('404') || msg.toLowerCase().includes('latest')) {
+          showInfoDialog(
+            'Aucune release trouvée sur GitHub. Vérifiez que npm run dist:publish a bien été exécuté.',
           );
+        } else {
+          showInfoDialog(msg);
         }
         break;
-      case 'update-error':
-        if (manualCheck || modal.classList.contains('is-open')) {
-          manualCheck = false;
-          const msg =
-            payload?.message ||
-            'Impossible de vérifier les mises à jour pour le moment.';
-          if (modal.classList.contains('is-open') && !actionsReady.hidden) {
-            break;
-          }
-          if (msg.includes('404') || msg.toLowerCase().includes('latest')) {
-            showManualResult(
-              'Mise à jour',
-              'Aucune release publiée sur GitHub pour le moment. L’administrateur doit exécuter npm run dist:publish.',
-            );
-          } else {
-            showManualResult('Mise à jour', msg);
-          }
-          if (modal.classList.contains('is-open')) {
-            setView('available');
-            downloadBtn.textContent = 'Réessayer';
-          }
-        }
-        break;
+      }
       default:
         break;
     }
-  });
+  }
 
   downloadBtn.addEventListener('click', async () => {
     if (downloadBtn.textContent === 'Fermer') return;
@@ -207,19 +220,29 @@
     try {
       await updater.check();
     } catch (_) {
-      /* error channel handles UI */
+      /* handled via update-error */
     } finally {
       checkUpdatesBtn.disabled = false;
     }
   });
 
-  updater.isPackaged().then((packaged) => {
+  async function boot() {
+    currentVersion = (await updater.getVersion()) || '';
+    if (appVersionEl) {
+      appVersionEl.textContent = currentVersion ? `v${currentVersion}` : '';
+    }
+
+    updater.onStatus(handleUpdateStatus);
+
+    const packaged = await updater.isPackaged();
     if (packaged && checkUpdatesBtn) {
       checkUpdatesBtn.hidden = false;
     }
-  });
 
-  updater.getVersion().then((version) => {
-    currentVersion = version || '';
-  });
+    if (packaged && updater.notifyReady) {
+      await updater.notifyReady();
+    }
+  }
+
+  boot();
 })();

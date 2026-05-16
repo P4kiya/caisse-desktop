@@ -116,6 +116,13 @@
         color: var(--text);
       }
 
+      .app-version {
+        margin-left: 8px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+      }
+
       .theme-toggle {
         flex-shrink: 0;
         width: 40px;
@@ -1281,7 +1288,7 @@
   <body>
     <header class="app-header">
       <div class="app-header-inner">
-        <h1>Caisse</h1>
+        <h1>Caisse <span class="app-version" id="appVersion"></span></h1>
         <div class="header-actions">
           <button
             type="button"

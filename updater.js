@@ -2,11 +2,10 @@ const { app } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 
-const CHECK_AFTER_LOAD_MS = 1500;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 let mainWindow = null;
-let checkScheduled = false;
+let rendererReady = false;
 
 function send(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -15,21 +14,15 @@ function send(channel, payload) {
 }
 
 function runUpdateCheck() {
-  return autoUpdater.checkForUpdates().catch((error) => {
-    log.warn('Update check failed:', error?.message || error);
-  });
-}
-
-function scheduleUpdateCheck() {
-  if (checkScheduled || !mainWindow || mainWindow.isDestroyed()) {
-    return;
+  if (!rendererReady) {
+    return Promise.resolve();
   }
 
-  checkScheduled = true;
-  setTimeout(() => {
-    checkScheduled = false;
-    runUpdateCheck();
-  }, CHECK_AFTER_LOAD_MS);
+  return autoUpdater.checkForUpdates().catch((error) => {
+    const message = error?.message || String(error);
+    log.warn('Update check failed:', message);
+    send('update-error', { message });
+  });
 }
 
 function initAutoUpdater(win, { ipcMain }) {
@@ -112,8 +105,12 @@ function initAutoUpdater(win, { ipcMain }) {
   ipcMain.handle('app-get-version', () => app.getVersion());
   ipcMain.handle('app-is-packaged', () => app.isPackaged);
 
-  win.webContents.once('did-finish-load', scheduleUpdateCheck);
+  ipcMain.handle('updater-renderer-ready', () => {
+    rendererReady = true;
+    return runUpdateCheck();
+  });
+
   setInterval(runUpdateCheck, CHECK_INTERVAL_MS);
 }
 
-module.exports = { initAutoUpdater, scheduleUpdateCheck };
+module.exports = { initAutoUpdater };

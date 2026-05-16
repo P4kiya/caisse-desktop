@@ -1,0 +1,64 @@
+{
+  "name": "caisse-desktop",
+  "version": "1.0.0",
+  "description": "Electron desktop client for caisse",
+  "main": "main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir",
+    "dist:publish": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.caisse.desktop",
+    "productName": "Caisse",
+    "files": [
+      "main.js",
+      "updater.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "theme.js",
+      "update-ui.js",
+      ".env"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "P4kiya",
+        "repo": "caisse-desktop"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "differentialPackage": true
+    }
+  }
+}

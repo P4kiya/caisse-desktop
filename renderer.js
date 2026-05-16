@@ -1,0 +1,695 @@
+const API_BASE_URL = window.caisseConfig?.apiBaseUrl || 'http://localhost:3000';
+const DATA_URL = `${API_BASE_URL}/data`;
+const STATS_URL = `${API_BASE_URL}/stats`;
+const LOCALE = 'fr-FR';
+
+const PERIOD_LABELS = {
+  today: "Aujourd'hui",
+  week: 'Cette semaine',
+  month: 'Ce mois',
+  all: 'Tout',
+};
+
+let currentPeriod = 'today';
+let editingId = null;
+let expandedOrderId = null;
+let editingLineIndex = null;
+let draftLines = [];
+let lastOrders = [];
+
+const priceInput = document.getElementById('price');
+const quantityInput = document.getElementById('quantity');
+const addLineBtn = document.getElementById('addLineBtn');
+const submitOrderBtn = document.getElementById('submitOrderBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const fetchBtn = document.getElementById('fetchBtn');
+const formTitle = document.getElementById('formTitle');
+const statusEl = document.getElementById('status');
+const listEl = document.getElementById('list');
+const draftBox = document.getElementById('draftBox');
+const draftLinesEl = document.getElementById('draftLines');
+const draftTotalEl = document.getElementById('draftTotal');
+const statsHeading = document.getElementById('statsHeading');
+const listHeading = document.getElementById('listHeading');
+const filterButtons = document.querySelectorAll('.filter-btn');
+
+const kpiAmount = document.getElementById('kpiAmount');
+const kpiEntries = document.getElementById('kpiEntries');
+const kpiQuantity = document.getElementById('kpiQuantity');
+const kpiAverage = document.getElementById('kpiAverage');
+const kpiSubEntries = document.getElementById('kpiSubEntries');
+const toastStack = document.getElementById('toastStack');
+const confirmModal = document.getElementById('confirmModal');
+const confirmTitle = document.getElementById('confirmTitle');
+const confirmMessage = document.getElementById('confirmMessage');
+const confirmOkBtn = document.getElementById('confirmOkBtn');
+const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+const confirmBackdrop = confirmModal?.querySelector('.confirm-backdrop');
+const themeToggle = document.getElementById('themeToggle');
+
+const TOAST_DURATION_MS = 4200;
+const THEME_STORAGE_KEY = 'caisse-theme';
+
+function setStatus(message, type = '') {
+  statusEl.textContent = message;
+  statusEl.className = type;
+}
+
+function getTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark'
+    ? 'dark'
+    : 'light';
+}
+
+function updateThemeToggleUi(theme) {
+  if (!themeToggle) return;
+
+  const isDark = theme === 'dark';
+  themeToggle.setAttribute(
+    'aria-label',
+    isDark ? 'Activer le mode clair' : 'Activer le mode sombre',
+  );
+  themeToggle.title = isDark ? 'Mode clair' : 'Mode sombre';
+}
+
+function setTheme(theme) {
+  const next = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (_) {
+    /* ignore */
+  }
+
+  updateThemeToggleUi(next);
+}
+
+function toggleTheme() {
+  setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+}
+
+function dismissToast(toast) {
+  if (!toast || toast.classList.contains('is-leaving')) return;
+
+  toast.classList.remove('is-visible');
+  toast.classList.add('is-leaving');
+
+  const remove = () => toast.remove();
+  toast.addEventListener('transitionend', remove, { once: true });
+  setTimeout(remove, 350);
+}
+
+function showToast({ title, message, type = 'success', duration = TOAST_DURATION_MS }) {
+  if (!toastStack) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <span class="toast-icon" aria-hidden="true">✓</span>
+    <div class="toast-content">
+      <p class="toast-title"></p>
+      <p class="toast-message"></p>
+    </div>
+    <button type="button" class="toast-close" aria-label="Fermer">×</button>
+    <span class="toast-progress" style="animation-duration: ${duration}ms"></span>
+  `;
+
+  toast.querySelector('.toast-title').textContent = title;
+  toast.querySelector('.toast-message').textContent = message;
+
+  const closeBtn = toast.querySelector('.toast-close');
+  let timerId;
+
+  const scheduleDismiss = () => {
+    timerId = window.setTimeout(() => dismissToast(toast), duration);
+  };
+
+  closeBtn.addEventListener('click', () => {
+    window.clearTimeout(timerId);
+    dismissToast(toast);
+  });
+
+  toastStack.appendChild(toast);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => toast.classList.add('is-visible'));
+  });
+  scheduleDismiss();
+}
+
+function showConfirmDialog({
+  title,
+  message,
+  confirmLabel = 'Supprimer',
+  cancelLabel = 'Annuler',
+}) {
+  if (!confirmModal) {
+    return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  }
+
+  return new Promise((resolve) => {
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmOkBtn.textContent = confirmLabel;
+    confirmCancelBtn.textContent = cancelLabel;
+
+    const finish = (value) => {
+      confirmModal.classList.remove('is-open');
+      confirmModal.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', onKeyDown);
+      confirmOkBtn.removeEventListener('click', onConfirm);
+      confirmCancelBtn.removeEventListener('click', onCancel);
+      confirmBackdrop.removeEventListener('click', onCancel);
+
+      window.setTimeout(() => {
+        confirmModal.hidden = true;
+        resolve(value);
+      }, 260);
+    };
+
+    const onConfirm = () => finish(true);
+    const onCancel = () => finish(false);
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel();
+    };
+
+    confirmOkBtn.addEventListener('click', onConfirm);
+    confirmCancelBtn.addEventListener('click', onCancel);
+    confirmBackdrop.addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKeyDown);
+
+    confirmModal.hidden = false;
+    confirmModal.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => confirmModal.classList.add('is-open'));
+    });
+    confirmCancelBtn.focus();
+  });
+}
+
+function setBusy(busy) {
+  addLineBtn.disabled = busy;
+  submitOrderBtn.disabled = busy || draftLines.length === 0;
+  cancelBtn.disabled = busy;
+  fetchBtn.disabled = busy;
+  filterButtons.forEach((btn) => {
+    btn.disabled = busy;
+  });
+  listEl.querySelectorAll('.btn-entry').forEach((btn) => {
+    btn.disabled = busy;
+  });
+  if (!busy) {
+    submitOrderBtn.disabled = draftLines.length === 0;
+  }
+}
+
+function formatMoney(value) {
+  const num = Number(value);
+  if (Number.isNaN(num)) return '0,00';
+  return num.toLocaleString(LOCALE, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function lineTotal(price, quantity) {
+  return Number(price) * Number(quantity);
+}
+
+function formatLineEquation(price, quantity) {
+  const total = lineTotal(price, quantity);
+  return `${formatMoney(price)} x ${quantity} = ${formatMoney(total)}`;
+}
+
+function draftTotalAmount() {
+  return draftLines.reduce((sum, line) => sum + lineTotal(line.price, line.quantity), 0);
+}
+
+function periodQuery() {
+  return `?period=${encodeURIComponent(currentPeriod)}`;
+}
+
+function updatePeriodUi() {
+  const label = PERIOD_LABELS[currentPeriod] || currentPeriod;
+
+  filterButtons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.period === currentPeriod);
+  });
+
+  statsHeading.innerHTML = `Statistiques pour <strong>${label}</strong>`;
+  listHeading.textContent = `Ventes (${label.toLowerCase()})`;
+}
+
+function clearLineEdit() {
+  editingLineIndex = null;
+  priceInput.value = '';
+  quantityInput.value = '';
+  updateAddLineButton();
+}
+
+function selectDraftLine(index) {
+  const line = draftLines[index];
+  if (!line) return;
+
+  editingLineIndex = index;
+  priceInput.value = String(line.price);
+  quantityInput.value = String(line.quantity);
+  updateAddLineButton();
+  renderDraft();
+  priceInput.focus();
+  priceInput.select();
+}
+
+function updateAddLineButton() {
+  addLineBtn.textContent =
+    editingLineIndex != null ? "Mettre à jour l'article" : 'Ajouter';
+}
+
+function renderDraft() {
+  draftLinesEl.innerHTML = '';
+  draftBox.classList.toggle('is-empty', draftLines.length === 0);
+  submitOrderBtn.disabled = draftLines.length === 0;
+
+  draftLines.forEach((line, index) => {
+    const li = document.createElement('li');
+    li.className = 'draft-line';
+    if (editingLineIndex === index) {
+      li.classList.add('is-selected');
+    }
+    li.dataset.index = String(index);
+    li.innerHTML = `
+      <button type="button" class="draft-line-body" data-index="${index}">
+        ${formatLineEquation(line.price, line.quantity)}
+      </button>
+      <button type="button" class="btn-remove-draft" data-index="${index}" aria-label="Retirer">×</button>
+    `;
+    draftLinesEl.appendChild(li);
+  });
+
+  draftTotalEl.innerHTML = `Total = <strong>${formatMoney(draftTotalAmount())}</strong>`;
+}
+
+function updateFormMode() {
+  if (editingId) {
+    formTitle.textContent = `Modifier la commande #${editingId}`;
+    submitOrderBtn.textContent = 'Enregistrer les modifications';
+    cancelBtn.hidden = false;
+  } else {
+    formTitle.textContent = 'Nouvelle vente';
+    submitOrderBtn.textContent = 'Enregistrer la vente';
+    cancelBtn.hidden = true;
+  }
+
+  listEl.querySelectorAll('li[data-id]').forEach((li) => {
+    li.classList.toggle('is-editing', Number(li.dataset.id) === editingId);
+  });
+
+  renderDraft();
+}
+
+function resetForm() {
+  editingId = null;
+  expandedOrderId = null;
+  editingLineIndex = null;
+  draftLines = [];
+  priceInput.value = '';
+  quantityInput.value = '';
+  updateAddLineButton();
+  updateFormMode();
+}
+
+function toggleOrderDetails(id) {
+  expandedOrderId = expandedOrderId === id ? null : id;
+  listEl.querySelectorAll('li[data-id]').forEach((li) => {
+    li.classList.toggle('is-expanded', Number(li.dataset.id) === expandedOrderId);
+  });
+}
+
+function startEdit(order) {
+  editingId = order.id;
+  expandedOrderId = order.id;
+  draftLines = order.items.map((item) => ({
+    price: Number(item.price),
+    quantity: Number(item.quantity),
+  }));
+  editingLineIndex = null;
+  priceInput.value = '';
+  quantityInput.value = '';
+  updateAddLineButton();
+  updateFormMode();
+  priceInput.focus();
+  setStatus('');
+}
+
+function formatSavedAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString(LOCALE);
+}
+
+function renderKpis(stats) {
+  if (!stats) return;
+
+  const label = stats.periodLabel || PERIOD_LABELS[stats.period] || '';
+  const entries = Number(stats.entries) || 0;
+
+  kpiAmount.textContent = formatMoney(stats.amount);
+  kpiEntries.textContent = String(entries);
+  kpiQuantity.textContent = String(stats.quantity ?? 0);
+  kpiAverage.textContent = formatMoney(stats.averageTicket);
+  kpiSubEntries.textContent = `ventes sur ${label.toLowerCase()}`;
+}
+
+function renderList(orders) {
+  lastOrders = orders;
+  listEl.innerHTML = '';
+
+  if (!orders.length) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = `Aucune commande pour ${PERIOD_LABELS[currentPeriod].toLowerCase()}.`;
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (const order of orders) {
+    const li = document.createElement('li');
+    li.dataset.id = String(order.id);
+    if (editingId === order.id) {
+      li.classList.add('is-editing');
+    }
+    if (expandedOrderId === order.id) {
+      li.classList.add('is-expanded');
+    }
+
+    const linesHtml = (order.items || [])
+      .map(
+        (item) =>
+          `<li class="order-line">${formatLineEquation(item.price, item.quantity)}</li>`,
+      )
+      .join('');
+
+    const total =
+      order.total != null
+        ? Number(order.total)
+        : (order.items || []).reduce(
+            (sum, item) => sum + lineTotal(item.price, item.quantity),
+            0,
+          );
+
+    const isExpanded = expandedOrderId === order.id;
+
+    li.innerHTML = `
+      <div class="entry-summary" data-action="toggle" role="button" tabindex="0" aria-expanded="${isExpanded}">
+        <div class="summary-main">
+          <strong>#${order.id}</strong>
+          <span class="summary-date">${formatSavedAt(order.savedAt)}</span>
+        </div>
+        <span class="summary-total">${formatMoney(total)}</span>
+        <span class="summary-chevron" aria-hidden="true">▼</span>
+      </div>
+      <div class="entry-details">
+        <ul class="order-lines">${linesHtml}</ul>
+        <div class="entry-actions">
+          <button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
+          <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>
+        </div>
+      </div>
+    `;
+    listEl.appendChild(li);
+  }
+}
+
+function addLineToDraft() {
+  const price = priceInput.value.trim();
+  const quantity = quantityInput.value.trim();
+
+  if (price === '' || quantity === '') {
+    setStatus('Veuillez saisir le prix et la quantité.', 'error');
+    return;
+  }
+
+  const parsedQty = Number(quantity);
+  if (parsedQty <= 0) {
+    setStatus('La quantité doit être supérieure à 0.', 'error');
+    return;
+  }
+
+  const line = {
+    price: Number(price),
+    quantity: parsedQty,
+  };
+
+  if (editingLineIndex != null) {
+    draftLines[editingLineIndex] = line;
+    editingLineIndex = null;
+  } else {
+    draftLines.push(line);
+  }
+
+  priceInput.value = '';
+  quantityInput.value = '';
+  updateAddLineButton();
+  renderDraft();
+  priceInput.focus();
+  setStatus('');
+}
+
+async function submitOrder() {
+  if (!draftLines.length) {
+    setStatus('Ajoutez au moins un article à la commande.', 'error');
+    return;
+  }
+
+  const isEdit = editingId != null;
+  setBusy(true);
+  setStatus(isEdit ? 'Modification…' : 'Enregistrement…');
+
+  try {
+    const url = isEdit ? `${DATA_URL}/${editingId}` : DATA_URL;
+    const response = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: draftLines.map((line) => ({
+          price: line.price,
+          quantity: line.quantity,
+        })),
+      }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        body.error || `Le serveur a répondu avec le code ${response.status}`,
+      );
+    }
+
+    resetForm();
+    priceInput.focus();
+    await fetchData();
+    setStatus('');
+    showToast(
+      isEdit
+        ? {
+            title: 'Vente modifiée',
+            message: 'Les modifications ont été enregistrées.',
+          }
+        : {
+            title: 'Vente enregistrée',
+            message: 'La vente a été ajoutée avec succès.',
+          },
+    );
+  } catch (err) {
+    setStatus(
+      isEdit
+        ? `Échec de la modification : ${err.message}`
+        : `Échec de l'enregistrement : ${err.message}`,
+      'error',
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function fetchData() {
+  setBusy(true);
+  updatePeriodUi();
+
+  const query = periodQuery();
+
+  try {
+    const [dataResponse, statsResponse] = await Promise.all([
+      fetch(`${DATA_URL}${query}`),
+      fetch(`${STATS_URL}${query}`),
+    ]);
+
+    if (!dataResponse.ok) {
+      const errBody = await dataResponse.json().catch(() => ({}));
+      throw new Error(
+        errBody.error || `Le serveur a répondu avec le code ${dataResponse.status}`,
+      );
+    }
+
+    const dataPayload = await dataResponse.json();
+    const orders = Array.isArray(dataPayload)
+      ? dataPayload
+      : Array.isArray(dataPayload.items)
+        ? dataPayload.items
+        : [];
+
+    renderList(orders);
+
+    if (statsResponse.ok) {
+      renderKpis(await statsResponse.json());
+    }
+
+    setStatus('');
+  } catch (err) {
+    renderList([]);
+    listEl.innerHTML = '';
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = `Impossible de charger les données. L'API est-elle démarrée sur ${API_BASE_URL} ?`;
+    listEl.appendChild(empty);
+    setStatus(`Échec du chargement : ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteOrder(id) {
+  const confirmed = await showConfirmDialog({
+    title: `Supprimer la vente #${id} ?`,
+    message:
+      'Cette action est irréversible. Tous les articles de cette vente seront définitivement supprimés.',
+  });
+  if (!confirmed) return;
+
+  setBusy(true);
+  setStatus('Suppression…');
+
+  try {
+    const response = await fetch(`${DATA_URL}/${id}`, { method: 'DELETE' });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        body.error || `Le serveur a répondu avec le code ${response.status}`,
+      );
+    }
+
+    if (editingId === id || expandedOrderId === id) {
+      if (editingId === id) {
+        resetForm();
+      } else {
+        expandedOrderId = null;
+      }
+    }
+
+    await fetchData();
+    setStatus('');
+    showToast({
+      title: 'Vente supprimée',
+      message: 'La vente a été retirée définitivement.',
+    });
+  } catch (err) {
+    setStatus(`Échec de la suppression : ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+function setPeriod(period) {
+  if (!PERIOD_LABELS[period] || period === currentPeriod) {
+    return;
+  }
+  currentPeriod = period;
+  fetchData();
+}
+
+draftLinesEl.addEventListener('click', (event) => {
+  const removeBtn = event.target.closest('.btn-remove-draft');
+  if (removeBtn) {
+    const index = Number(removeBtn.dataset.index);
+    if (Number.isNaN(index)) return;
+    draftLines.splice(index, 1);
+    if (editingLineIndex === index) {
+      clearLineEdit();
+    } else if (editingLineIndex != null && index < editingLineIndex) {
+      editingLineIndex -= 1;
+    }
+    renderDraft();
+    return;
+  }
+
+  const lineBtn = event.target.closest('.draft-line-body');
+  if (!lineBtn) return;
+  const index = Number(lineBtn.dataset.index);
+  if (Number.isNaN(index)) return;
+  selectDraftLine(index);
+});
+
+listEl.addEventListener('click', (event) => {
+  const actionEl = event.target.closest('[data-action]');
+  if (!actionEl) return;
+
+  const li = actionEl.closest('li[data-id]');
+  if (!li) return;
+
+  const id = Number(li.dataset.id);
+
+  if (actionEl.dataset.action === 'toggle') {
+    toggleOrderDetails(id);
+    const summary = li.querySelector('.entry-summary');
+    if (summary) {
+      summary.setAttribute('aria-expanded', String(expandedOrderId === id));
+    }
+    return;
+  }
+
+  if (actionEl.disabled) return;
+
+  if (actionEl.dataset.action === 'edit') {
+    const order = lastOrders.find((row) => row.id === id);
+    if (order) {
+      startEdit(order);
+    }
+    return;
+  }
+
+  if (actionEl.dataset.action === 'delete') {
+    deleteOrder(id);
+  }
+});
+
+listEl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+
+  const summary = event.target.closest('.entry-summary[data-action="toggle"]');
+  if (!summary) return;
+
+  event.preventDefault();
+  const li = summary.closest('li[data-id]');
+  if (!li) return;
+
+  const id = Number(li.dataset.id);
+  toggleOrderDetails(id);
+  summary.setAttribute('aria-expanded', String(expandedOrderId === id));
+});
+
+filterButtons.forEach((btn) => {
+  btn.addEventListener('click', () => setPeriod(btn.dataset.period));
+});
+
+addLineBtn.addEventListener('click', addLineToDraft);
+submitOrderBtn.addEventListener('click', submitOrder);
+cancelBtn.addEventListener('click', resetForm);
+fetchBtn.addEventListener('click', fetchData);
+themeToggle?.addEventListener('click', toggleTheme);
+
+updateThemeToggleUi(getTheme());
+updatePeriodUi();
+fetchData();

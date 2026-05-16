@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="theme.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http: https:"
+    />
+    <title>Caisse</title>
+    <style>
+      :root,
+      [data-theme='light'] {
+        --bg: #f5f4f1;
+        --surface: #ffffff;
+        --surface-muted: #efeeeb;
+        --border: #e6e3dd;
+        --border-strong: #d5d1c9;
+        --text: #1c1b19;
+        --text-muted: #6f6c66;
+        --text-soft: #9a9690;
+        --primary: #2f3f52;
+        --primary-hover: #243345;
+        --primary-soft: #eceff2;
+        --success: #3d6b52;
+        --success-soft: #f2f6f3;
+        --error: #b54a4a;
+        --error-soft: #fdf5f5;
+        --danger-hover: #a34242;
+        --overlay: rgba(28, 27, 25, 0.42);
+        --shadow: 0 1px 2px rgba(28, 27, 25, 0.04);
+        --shadow-md: 0 4px 14px rgba(28, 27, 25, 0.06);
+        --shadow-lg: 0 24px 48px rgba(28, 27, 25, 0.14);
+        --focus-ring: rgba(47, 63, 82, 0.12);
+        --btn-primary-shadow: 0 6px 18px rgba(47, 63, 82, 0.18);
+        --toast-shadow: 0 12px 32px rgba(28, 27, 25, 0.1);
+        --danger-shadow: 0 4px 14px rgba(181, 74, 74, 0.28);
+        --danger-shadow-hover: 0 6px 18px rgba(181, 74, 74, 0.35);
+        --on-primary: #ffffff;
+      }
+
+      [data-theme='dark'] {
+        --bg: #121110;
+        --surface: #1c1b19;
+        --surface-muted: #262422;
+        --border: #35322e;
+        --border-strong: #45413c;
+        --text: #f3f1ed;
+        --text-muted: #a9a39a;
+        --text-soft: #78736b;
+        --primary: #9eb4cc;
+        --primary-hover: #b5c8dc;
+        --primary-soft: #2a3340;
+        --success: #6fb888;
+        --success-soft: #1e2a23;
+        --error: #e07d7d;
+        --error-soft: #322424;
+        --danger-hover: #eb9494;
+        --overlay: rgba(0, 0, 0, 0.62);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.55);
+        --focus-ring: rgba(158, 180, 204, 0.22);
+        --btn-primary-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+        --toast-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+        --danger-shadow: 0 4px 14px rgba(224, 125, 125, 0.25);
+        --danger-shadow-hover: 0 6px 18px rgba(224, 125, 125, 0.35);
+        --on-primary: #121110;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        overflow: hidden;
+      }
+
+      .app-header {
+        flex-shrink: 0;
+        padding: 14px 24px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      .app-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .app-header h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .theme-toggle {
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: 10px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface-muted);
+        color: var(--text-muted);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease,
+          border-color 0.15s ease,
+          transform 0.15s ease;
+      }
+
+      .theme-toggle:hover {
+        color: var(--primary);
+        border-color: var(--primary);
+        background: var(--primary-soft);
+      }
+
+      .theme-toggle:active {
+        transform: scale(0.96);
+      }
+
+      .theme-toggle svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.75;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      [data-theme='light'] .theme-toggle .icon-moon {
+        display: none;
+      }
+
+      [data-theme='dark'] .theme-toggle .icon-sun {
+        display: none;
+      }
+
+      .app-header p {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+      }
+
+      .layout {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        width: 100%;
+      }
+
+      .panel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .panel-left {
+        flex: 0 0 42%;
+        max-width: 480px;
+        padding: 0;
+        border-right: 1px solid var(--border);
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .panel-left-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 24px 24px 16px;
+        padding-right: 18px;
+      }
+
+      .panel-left-footer {
+        flex-shrink: 0;
+        padding: 16px 24px 24px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: 0 -4px 12px rgba(28, 27, 25, 0.04);
+      }
+
+      .panel-left-body,
+      .list-wrap {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+      }
+
+      .panel-left-body::-webkit-scrollbar,
+      .list-wrap::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .panel-left-body::-webkit-scrollbar-track,
+      .list-wrap::-webkit-scrollbar-track {
+        background: transparent;
+        border-radius: 999px;
+      }
+
+      .panel-left-body::-webkit-scrollbar-thumb,
+      .list-wrap::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 999px;
+      }
+
+      .panel-left-body::-webkit-scrollbar-thumb:hover,
+      .list-wrap::-webkit-scrollbar-thumb:hover {
+        background: var(--text-soft);
+      }
+
+      .panel-right {
+        flex: 1;
+        padding: 24px;
+        background: var(--bg);
+      }
+
+      .panel h2 {
+        margin: 0 0 20px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px 14px;
+        margin-bottom: 18px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 1rem;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--focus-ring);
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 4px;
+      }
+
+      button {
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .actions-col {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 0;
+      }
+
+      #addLineBtn {
+        width: 100%;
+        margin-bottom: 18px;
+        background: var(--primary);
+        color: var(--on-primary);
+        box-shadow: var(--shadow-md);
+        transition: background 0.15s, box-shadow 0.15s;
+      }
+
+      #addLineBtn:hover:not(:disabled) {
+        background: var(--primary-hover);
+        box-shadow: var(--btn-primary-shadow);
+      }
+
+      #submitOrderBtn {
+        background: var(--surface);
+        color: var(--primary);
+        border: 2px solid var(--primary);
+        box-shadow: var(--shadow);
+      }
+
+      #submitOrderBtn:hover:not(:disabled) {
+        background: var(--primary);
+        color: var(--on-primary);
+      }
+
+      #submitOrderBtn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      #fetchBtn {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+      }
+
+      #fetchBtn:hover {
+        background: var(--surface-muted);
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      #status {
+        min-height: 1.25rem;
+        margin-top: 12px;
+        font-size: 0.85rem;
+      }
+
+      .panel-left-footer #status {
+        margin-top: 10px;
+        margin-bottom: 0;
+      }
+
+      #status.error {
+        color: var(--error);
+      }
+
+      #status.success {
+        color: var(--success);
+      }
+
+      .toast-stack {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 10px;
+        pointer-events: none;
+        max-width: min(360px, calc(100vw - 40px));
+      }
+
+      .toast {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        width: 100%;
+        padding: 14px 14px 16px;
+        border-radius: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md), var(--toast-shadow);
+        pointer-events: auto;
+        overflow: hidden;
+        opacity: 0;
+        transform: translateX(24px) translateY(8px);
+        transition:
+          opacity 0.35s ease,
+          transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .toast.is-visible {
+        opacity: 1;
+        transform: translateX(0) translateY(0);
+      }
+
+      .toast.is-leaving {
+        opacity: 0;
+        transform: translateX(16px) scale(0.98);
+        transition-duration: 0.25s;
+      }
+
+      .toast-success {
+        border-left: 4px solid var(--success);
+      }
+
+      .toast-icon {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1;
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .toast-content {
+        flex: 1;
+        min-width: 0;
+        padding-top: 2px;
+      }
+
+      .toast-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.3;
+      }
+
+      .toast-message {
+        margin: 4px 0 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
+
+      .toast-close {
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        margin: -4px -4px 0 0;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 1.1rem;
+        line-height: 1;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .toast-close:hover {
+        background: var(--surface-muted);
+        color: var(--text);
+      }
+
+      .toast-progress {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        height: 3px;
+        width: 100%;
+        transform-origin: left;
+        background: var(--success);
+        opacity: 0.35;
+        animation: toast-progress linear forwards;
+      }
+
+      @keyframes toast-progress {
+        from {
+          transform: scaleX(1);
+        }
+        to {
+          transform: scaleX(0);
+        }
+      }
+
+      .confirm-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        opacity: 0;
+        transition: opacity 0.28s ease;
+      }
+
+      .confirm-modal[hidden] {
+        display: none;
+      }
+
+      .confirm-modal.is-open {
+        opacity: 1;
+      }
+
+      .confirm-backdrop {
+        position: absolute;
+        inset: 0;
+        background: var(--overlay);
+        backdrop-filter: blur(5px);
+      }
+
+      .confirm-dialog {
+        position: relative;
+        z-index: 1;
+        width: min(400px, 100%);
+        padding: 28px 28px 24px;
+        border-radius: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow:
+          var(--shadow-md),
+          var(--shadow-lg);
+        text-align: center;
+        transform: scale(0.94) translateY(12px);
+        opacity: 0;
+        transition:
+          transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.28s ease;
+      }
+
+      .confirm-modal.is-open .confirm-dialog {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+      }
+
+      .confirm-icon {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        background: var(--error-soft);
+        color: var(--error);
+        border: 1px solid color-mix(in srgb, var(--error) 25%, transparent);
+      }
+
+      .confirm-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.35;
+      }
+
+      .confirm-message {
+        margin: 10px 0 0;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+
+      .confirm-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .btn-confirm {
+        flex: 1;
+        padding: 11px 16px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          color 0.15s ease,
+          border-color 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .btn-confirm-cancel {
+        background: var(--surface);
+        color: var(--text-muted);
+        border-color: var(--border-strong);
+      }
+
+      .btn-confirm-cancel:hover {
+        background: var(--surface-muted);
+        color: var(--text);
+      }
+
+      .btn-confirm-danger {
+        background: var(--error);
+        color: #fff;
+        box-shadow: var(--danger-shadow);
+      }
+
+      .btn-confirm-danger:hover {
+        background: var(--danger-hover);
+        box-shadow: var(--danger-shadow-hover);
+      }
+
+      .btn-confirm-primary {
+        background: var(--primary);
+        color: var(--on-primary);
+        box-shadow: var(--btn-primary-shadow);
+      }
+
+      .btn-confirm-primary:hover {
+        background: var(--primary-hover);
+      }
+
+      .update-modal {
+        z-index: 1150;
+      }
+
+      .update-modal .update-dialog {
+        text-align: center;
+      }
+
+      .update-icon {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background: var(--primary-soft);
+        color: var(--primary);
+        border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+      }
+
+      .update-version {
+        display: inline-block;
+        margin: 0 0 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--primary);
+        background: var(--primary-soft);
+        border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+      }
+
+      #updateMessage {
+        white-space: pre-line;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+
+      .update-progress-track {
+        height: 8px;
+        margin-top: 16px;
+        border-radius: 999px;
+        background: var(--surface-muted);
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+
+      .update-progress-fill {
+        display: block;
+        height: 100%;
+        width: 0;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+        transition: width 0.2s ease;
+      }
+
+      .update-progress-text {
+        margin: 8px 0 0;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .draft-box {
+        margin-bottom: 0;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: var(--surface-muted);
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .draft-lines-scroll {
+        max-height: 220px;
+        overflow-y: auto;
+        margin: 0 -4px;
+        padding-right: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-strong) transparent;
+      }
+
+      .draft-lines-scroll::-webkit-scrollbar {
+        width: 5px;
+      }
+
+      .draft-lines-scroll::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 999px;
+      }
+
+      .draft-box.is-empty {
+        display: none;
+      }
+
+      .draft-label {
+        margin: 0 0 10px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+      }
+
+      #draftLines {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      .draft-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.9rem;
+        color: var(--text);
+      }
+
+      .draft-line.is-selected {
+        background: var(--primary-soft);
+        margin: 0 -8px;
+        padding: 8px;
+        border-radius: 6px;
+        border-bottom-color: transparent;
+      }
+
+      .draft-line-body {
+        flex: 1;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .draft-line-body:hover {
+        color: var(--primary);
+      }
+
+      .draft-line:last-child {
+        border-bottom: none;
+      }
+
+      .btn-remove-draft {
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        border-radius: 4px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+
+      .btn-remove-draft:hover {
+        border-color: var(--error);
+        color: var(--error);
+      }
+
+      .draft-total {
+        margin: 12px 0 0;
+        padding-top: 10px;
+        border-top: 1px solid var(--border-strong);
+        font-size: 0.95rem;
+        color: var(--text-muted);
+      }
+
+      .draft-total strong {
+        color: var(--success);
+        font-size: 1.05rem;
+      }
+
+      .order-lines {
+        margin: 8px 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .order-line {
+        font-size: 0.9rem;
+        color: var(--text);
+        padding: 2px 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+
+      #list li {
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .entry-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 14px 16px;
+        cursor: pointer;
+        user-select: none;
+        text-align: left;
+        background: transparent;
+        border: none;
+        font: inherit;
+        color: inherit;
+      }
+
+      .entry-summary:hover {
+        background: var(--surface-muted);
+      }
+
+      .summary-main {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .summary-main strong {
+        color: var(--primary);
+        font-size: 0.9rem;
+      }
+
+      .summary-date {
+        font-size: 0.8rem;
+        color: var(--text-soft);
+      }
+
+      .summary-total {
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--success);
+        white-space: nowrap;
+      }
+
+      .summary-chevron {
+        font-size: 0.7rem;
+        color: var(--text-soft);
+        transition: transform 0.2s;
+        flex-shrink: 0;
+      }
+
+      #list li.is-expanded .summary-chevron {
+        transform: rotate(180deg);
+      }
+
+      .entry-details {
+        display: none;
+        padding: 0 16px 14px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-muted);
+      }
+
+      #list li.is-expanded .entry-details {
+        display: block;
+      }
+
+      #list li .entry-details .order-lines {
+        margin-top: 12px;
+      }
+
+      #list li .entry-details .entry-actions {
+        margin-top: 12px;
+        padding-top: 12px;
+      }
+
+      .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+      }
+
+      @media (max-width: 1000px) {
+        .kpi-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .kpi-card {
+        padding: 14px 16px;
+        border-radius: 10px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
+
+      .kpi-card.highlight {
+        border-color: var(--border-strong);
+        background: var(--primary-soft);
+        box-shadow: var(--shadow-md);
+      }
+
+      .kpi-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .kpi-value {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .kpi-card.highlight .kpi-value {
+        color: var(--primary);
+      }
+
+      .kpi-sub {
+        margin-top: 4px;
+        font-size: 0.75rem;
+        color: var(--text-soft);
+      }
+
+      .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-shrink: 0;
+      }
+
+      .filter-btn {
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .filter-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-soft);
+      }
+
+      .filter-btn.active {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #fff;
+      }
+
+      .stats-heading {
+        margin: 0 0 12px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+
+      .stats-heading strong {
+        color: var(--text);
+      }
+
+      .panel-right-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-shrink: 0;
+      }
+
+      .panel-right-header h2 {
+        margin: 0;
+      }
+
+      .list-wrap {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        padding-right: 6px;
+      }
+
+      #list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      #list > li:not(.empty) {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 10px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+
+      #list .empty {
+        color: var(--text-muted);
+        border-style: dashed;
+        border-color: var(--border-strong);
+        text-align: center;
+        background: var(--surface-muted);
+        box-shadow: none;
+      }
+
+      #list li.is-editing {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+        box-shadow: var(--shadow-md);
+      }
+
+      .entry-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+      }
+
+      .btn-entry {
+        padding: 6px 14px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text-muted);
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+      }
+
+      .btn-entry:hover:not(:disabled) {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-soft);
+      }
+
+      .btn-entry.btn-delete:hover:not(:disabled) {
+        border-color: var(--error);
+        color: var(--error);
+        background: var(--error-soft);
+      }
+
+      #cancelBtn {
+        background: var(--surface);
+        color: var(--text-muted);
+        border: 1px solid var(--border-strong);
+        box-shadow: none;
+      }
+
+      #cancelBtn:hover {
+        background: var(--surface-muted);
+        color: var(--text);
+      }
+
+      .actions-form {
+        display: flex;
+        gap: 10px;
+      }
+
+      .actions-form #cancelBtn[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-inner">
+        <h1>Caisse</h1>
+        <button
+          type="button"
+          id="themeToggle"
+          class="theme-toggle"
+          aria-label="Activer le mode sombre"
+          title="Mode sombre"
+        >
+          <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="panel panel-left">
+        <div class="panel-left-body">
+          <h2 id="formTitle">Nouvelle vente</h2>
+          <label for="price">Prix</label>
+          <input id="price" type="number" step="0.01" min="0" placeholder="0,00" />
+
+          <label for="quantity">Quantité</label>
+          <input id="quantity" type="number" step="1" min="0" placeholder="0" />
+
+          <button type="button" id="addLineBtn">Ajouter</button>
+
+          <div class="draft-box is-empty" id="draftBox">
+            <p class="draft-label">Articles en cours</p>
+            <div class="draft-lines-scroll">
+              <ul id="draftLines"></ul>
+            </div>
+            <p class="draft-total" id="draftTotal">Total = <strong>0,00</strong></p>
+          </div>
+        </div>
+
+        <div class="panel-left-footer">
+          <div class="actions-col actions-form">
+            <button type="button" id="submitOrderBtn" disabled>Enregistrer la vente</button>
+            <button type="button" id="cancelBtn" hidden>Annuler</button>
+          </div>
+          <p id="status" role="status" aria-live="polite"></p>
+        </div>
+      </aside>
+
+      <section class="panel panel-right">
+        <div class="filter-bar" role="tablist" aria-label="Filtre par période">
+          <button type="button" class="filter-btn active" data-period="today">Aujourd'hui</button>
+          <button type="button" class="filter-btn" data-period="week">Semaine</button>
+          <button type="button" class="filter-btn" data-period="month">Mois</button>
+          <button type="button" class="filter-btn" data-period="all">Tout</button>
+        </div>
+
+        <p class="stats-heading" id="statsHeading">
+          Statistiques pour <strong>Aujourd'hui</strong>
+        </p>
+
+        <div class="kpi-grid" id="kpiGrid">
+          <article class="kpi-card highlight">
+            <div class="kpi-label" id="kpiLabelAmount">Montant total</div>
+            <div class="kpi-value" id="kpiAmount">—</div>
+            <div class="kpi-sub" id="kpiSubAmount">chiffre d'affaires</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">Ventes</div>
+            <div class="kpi-value" id="kpiEntries">—</div>
+            <div class="kpi-sub" id="kpiSubEntries">ventes</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">Unités</div>
+            <div class="kpi-value" id="kpiQuantity">—</div>
+            <div class="kpi-sub">quantité vendue</div>
+          </article>
+          <article class="kpi-card">
+            <div class="kpi-label">Moyenne / vente</div>
+            <div class="kpi-value" id="kpiAverage">—</div>
+            <div class="kpi-sub">par vente</div>
+          </article>
+        </div>
+
+        <div class="panel-right-header">
+          <h2 id="listHeading">Ventes (aujourd'hui)</h2>
+          <button type="button" id="fetchBtn">Actualiser</button>
+        </div>
+        <div class="list-wrap">
+          <ul id="list">
+            <li class="empty">Chargement…</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <div
+      id="confirmModal"
+      class="confirm-modal"
+      hidden
+      aria-hidden="true"
+    >
+      <div class="confirm-backdrop"></div>
+      <div
+        class="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirmTitle"
+        aria-describedby="confirmMessage"
+      >
+        <div class="confirm-icon" aria-hidden="true">!</div>
+        <h3 id="confirmTitle" class="confirm-title"></h3>
+        <p id="confirmMessage" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button type="button" id="confirmCancelBtn" class="btn-confirm btn-confirm-cancel">
+            Annuler
+          </button>
+          <button type="button" id="confirmOkBtn" class="btn-confirm btn-confirm-danger">
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="updateModal"
+      class="confirm-modal update-modal"
+      hidden
+      aria-hidden="true"
+    >
+      <div class="confirm-backdrop update-backdrop"></div>
+      <div
+        class="confirm-dialog update-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="updateTitle"
+        aria-describedby="updateMessage"
+      >
+        <div class="update-icon" aria-hidden="true">↑</div>
+        <h3 id="updateTitle" class="confirm-title">Mise à jour disponible</h3>
+        <p id="updateVersion" class="update-version"></p>
+        <p id="updateMessage" class="confirm-message"></p>
+        <div id="updateProgressWrap" hidden>
+          <div class="update-progress-track">
+            <span id="updateProgressFill" class="update-progress-fill"></span>
+          </div>
+          <p id="updateProgressText" class="update-progress-text">Téléchargement… 0%</p>
+        </div>
+        <div class="confirm-actions" id="updateActionsAvailable">
+          <button type="button" id="updateLaterBtn" class="btn-confirm btn-confirm-cancel">
+            Plus tard
+          </button>
+          <button type="button" id="updateDownloadBtn" class="btn-confirm btn-confirm-primary">
+            Télécharger
+          </button>
+        </div>
+        <div class="confirm-actions" id="updateActionsReady" hidden>
+          <button type="button" id="updateLaterReadyBtn" class="btn-confirm btn-confirm-cancel">
+            Plus tard
+          </button>
+          <button type="button" id="updateInstallBtn" class="btn-confirm btn-confirm-primary">
+            Redémarrer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="renderer.js"></script>
+    <script src="update-ui.js"></script>
+  </body>
+</html>

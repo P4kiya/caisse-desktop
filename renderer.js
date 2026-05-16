@@ -46,6 +46,11 @@ const confirmOkBtn = document.getElementById('confirmOkBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const confirmBackdrop = confirmModal?.querySelector('.confirm-backdrop');
 const themeToggle = document.getElementById('themeToggle');
+const numpadEl = document.getElementById('numpad');
+const numpadTargetHint = document.getElementById('numpadTargetHint');
+const numpadDecimalBtn = document.getElementById('numpadDecimal');
+
+let numpadTarget = priceInput;
 
 const TOAST_DURATION_MS = 4200;
 const THEME_STORAGE_KEY = 'caisse-theme';
@@ -198,9 +203,84 @@ function setBusy(busy) {
   listEl.querySelectorAll('.btn-entry').forEach((btn) => {
     btn.disabled = busy;
   });
+  numpadEl?.querySelectorAll('button').forEach((btn) => {
+    btn.disabled = busy;
+  });
   if (!busy) {
     submitOrderBtn.disabled = draftLines.length === 0;
+    updateNumpadUi();
   }
+}
+
+function setNumpadTarget(input) {
+  numpadTarget = input;
+  priceInput.classList.toggle('is-numpad-active', input === priceInput);
+  quantityInput.classList.toggle('is-numpad-active', input === quantityInput);
+  updateNumpadUi();
+}
+
+function updateNumpadUi() {
+  if (numpadTargetHint) {
+    numpadTargetHint.textContent = numpadTarget === quantityInput ? 'Quantité' : 'Prix';
+  }
+  if (numpadDecimalBtn) {
+    const isPrice = numpadTarget === priceInput;
+    numpadDecimalBtn.disabled = !isPrice;
+    numpadDecimalBtn.style.visibility = isPrice ? 'visible' : 'hidden';
+  }
+}
+
+function appendNumpadDigit(digit) {
+  if (!numpadTarget) return;
+
+  let value = numpadTarget.value || '';
+
+  if (digit === '.') {
+    if (numpadTarget !== priceInput) return;
+    if (value.includes('.')) return;
+    value = value ? `${value}.` : '0.';
+  } else {
+    if (value === '0' && numpadTarget === quantityInput) {
+      value = digit;
+    } else {
+      value += digit;
+    }
+  }
+
+  numpadTarget.value = value;
+}
+
+function numpadBackspace() {
+  if (!numpadTarget?.value) return;
+  numpadTarget.value = numpadTarget.value.slice(0, -1);
+}
+
+function numpadClear() {
+  if (numpadTarget) numpadTarget.value = '';
+}
+
+function initNumpad() {
+  if (!numpadEl) return;
+
+  setNumpadTarget(priceInput);
+
+  [priceInput, quantityInput].forEach((input) => {
+    input.addEventListener('focus', () => setNumpadTarget(input));
+    input.addEventListener('click', () => setNumpadTarget(input));
+  });
+
+  numpadEl.addEventListener('click', (event) => {
+    const digitBtn = event.target.closest('[data-digit]');
+    if (digitBtn) {
+      appendNumpadDigit(digitBtn.dataset.digit);
+      return;
+    }
+
+    const action = event.target.closest('[data-numpad]')?.dataset.numpad;
+    if (action === 'decimal') appendNumpadDigit('.');
+    if (action === 'backspace') numpadBackspace();
+    if (action === 'clear') numpadClear();
+  });
 }
 
 function formatMoney(value) {
@@ -690,6 +770,7 @@ cancelBtn.addEventListener('click', resetForm);
 fetchBtn.addEventListener('click', fetchData);
 themeToggle?.addEventListener('click', toggleTheme);
 
+initNumpad();
 updateThemeToggleUi(getTheme());
 updatePeriodUi();
 fetchData();

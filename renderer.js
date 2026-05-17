@@ -2,6 +2,7 @@ const API_BASE_URL = window.caisseConfig?.apiBaseUrl || 'http://localhost:3000';
 const DATA_URL = `${API_BASE_URL}/data`;
 const STATS_URL = `${API_BASE_URL}/stats`;
 const LOCALE = 'fr-FR';
+const CURRENCY_SUFFIX = ' DH';
 
 const PERIOD_LABELS = {
   today: "Aujourd'hui",
@@ -385,10 +386,12 @@ function initNumpad() {
 function formatMoney(value) {
   const num = Number(value);
   if (Number.isNaN(num)) return '0,00';
-  return num.toLocaleString(LOCALE, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return (
+    num.toLocaleString(LOCALE, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + CURRENCY_SUFFIX
+  );
 }
 
 function lineTotal(price, quantity) {

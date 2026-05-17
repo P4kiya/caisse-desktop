@@ -1,6 +1,7 @@
 const { BrowserWindow } = require('electron');
 
 const LOCALE = 'fr-FR';
+const CURRENCY_SUFFIX = ' DH';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -13,10 +14,12 @@ function escapeHtml(value) {
 function formatMoney(value) {
   const num = Number(value);
   if (Number.isNaN(num)) return '0,00';
-  return num.toLocaleString(LOCALE, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return (
+    num.toLocaleString(LOCALE, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + CURRENCY_SUFFIX
+  );
 }
 
 function formatSavedAt(value) {
@@ -207,7 +210,7 @@ function buildReceiptHtml(order, options = {}) {
     </table>
     <div class="total-row">
       <span>TOTAL</span>
-      <span>${formatMoney(total)} €</span>
+      <span>${formatMoney(total)}</span>
     </div>
     <p class="footer">Merci de votre visite</p>
   </div>

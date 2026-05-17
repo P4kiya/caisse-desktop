@@ -159,6 +159,117 @@ function ensureEnvFile(caisseHome) {
   }
 }
 
+function resolveNodeExecutable() {
+  const fromPath = process.env.PATH?.split(';')
+    .map((p) => path.join(p.trim(), 'node.exe'))
+    .find((p) => p && fs.existsSync(p));
+  if (fromPath) return fromPath;
+
+  const candidates = [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs', 'node.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'nodejs', 'node.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+function resolveNpmExecutable() {
+  const fromPath = process.env.PATH?.split(';')
+    .map((p) => path.join(p.trim(), 'npm.cmd'))
+    .find((p) => p && fs.existsSync(p));
+  if (fromPath) return fromPath;
+
+  const node = resolveNodeExecutable();
+  if (node) {
+    const npm = path.join(path.dirname(node), 'npm.cmd');
+    if (fs.existsSync(npm)) return npm;
+  }
+  return null;
+}
+
+function envWithNodeOnPath() {
+  const env = { ...process.env };
+  const node = resolveNodeExecutable();
+  if (node) {
+    const nodeDir = path.dirname(node);
+    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+    const current = env[pathKey] || env.PATH || '';
+    if (!current.toLowerCase().includes(nodeDir.toLowerCase())) {
+      env[pathKey] = `${nodeDir};${current}`;
+    }
+  }
+  return env;
+}
+
+function apiDepsReady(caisseHome) {
+  return fs.existsSync(
+    path.join(caisseHome, 'caisse_api', 'node_modules', 'express', 'package.json'),
+  );
+}
+
+function ensureApiDependencies(caisseHome) {
+  if (apiDepsReady(caisseHome)) {
+    return { ok: true };
+  }
+
+  const node = resolveNodeExecutable();
+  if (!node) {
+    return {
+      ok: false,
+      error:
+        'Node.js n est pas installe. Telechargez-le sur https://nodejs.org puis redemarrez Caisse.',
+    };
+  }
+
+  const npm = resolveNpmExecutable();
+  if (!npm) {
+    return {
+      ok: false,
+      error: 'npm introuvable. Reinstallez Node.js (version LTS) avec npm inclus.',
+    };
+  }
+
+  const apiDir = path.join(caisseHome, 'caisse_api');
+  const nodeModules = path.join(apiDir, 'node_modules');
+  if (fs.existsSync(nodeModules)) {
+    try {
+      fs.rmSync(nodeModules, { recursive: true, force: true });
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  const logDir = path.join(caisseHome, 'setup', 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+  const logFile = path.join(logDir, 'npm-install.log');
+
+  const result = spawnSync(npm, ['install', '--omit=dev'], {
+    cwd: apiDir,
+    windowsHide: true,
+    timeout: 600000,
+    env: envWithNodeOnPath(),
+    encoding: 'utf8',
+  });
+
+  if (result.status !== 0 || !apiDepsReady(caisseHome)) {
+    let tail = '';
+    try {
+      if (fs.existsSync(logFile)) {
+        tail = fs.readFileSync(logFile, 'utf8').split('\n').slice(-8).join('\n').trim();
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    const detail = (result.stderr || result.stdout || tail || '').slice(-600);
+    return {
+      ok: false,
+      error: `npm install a echoue.${detail ? `\n\n${detail}` : '\n\nVerifiez que Node.js est installe.'}`,
+    };
+  }
+
+  return { ok: true };
+}
+
 function resolveStartScript(caisseHome) {
   const inProject = path.join(caisseHome, 'setup', 'scripts', 'Start-CaisseApi.ps1');
   if (fs.existsSync(inProject)) return inProject;
@@ -179,6 +290,7 @@ function startApiViaCaisseCmd(caisseHome) {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
+      env: envWithNodeOnPath(),
     });
     child.unref();
     return { method: 'Caisse.cmd', pid: child.pid };
@@ -205,6 +317,7 @@ function startApiViaCaisseCmd(caisseHome) {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
+      env: envWithNodeOnPath(),
     },
   );
   child.unref();
@@ -250,6 +363,11 @@ async function prepareCaisseBackend() {
   ensureEnvFile(home);
   saveHomePath(home);
 
+  const deps = ensureApiDependencies(home);
+  if (!deps.ok) {
+    return { ok: false, error: deps.error, home };
+  }
+
   return { ok: true, home, usesCmd: fs.existsSync(path.join(home, 'Caisse.cmd')) };
 }
 
@@ -273,7 +391,7 @@ async function ensureBackendRunning() {
     return { ok: false, error: err.message || String(err), home };
   }
 
-  const maxAttempts = 60;
+  const maxAttempts = 90;
   for (let i = 0; i < maxAttempts; i += 1) {
     await new Promise((r) => setTimeout(r, 500));
     if (await isApiUp(port)) {

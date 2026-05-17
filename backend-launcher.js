@@ -13,6 +13,12 @@ PORT=3000
 API_BASE_URL=http://localhost:3000
 `;
 
+/** Dossier d installation standard sur tous les PC client */
+function getStandardCaisseRoot() {
+  const fromEnv = (process.env.CAISSE_HOME || '').trim();
+  return path.normalize(fromEnv || 'C:\\caisse');
+}
+
 function readApiPort(caisseHome) {
   try {
     const envPath = path.join(caisseHome, 'caisse_api', '.env');
@@ -41,6 +47,9 @@ function isValidCaisseHome(dir) {
 }
 
 function readHomePathFromRegistry() {
+  const standard = getStandardCaisseRoot();
+  if (isValidCaisseHome(standard)) return standard;
+
   const files = [
     path.join(process.env.PROGRAMDATA || '', 'Caisse', 'home.path'),
     path.join(process.env.LOCALAPPDATA || '', 'Caisse', 'home.path'),
@@ -58,9 +67,82 @@ function readHomePathFromRegistry() {
   return null;
 }
 
+function copyTreeFiltered(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.cpSync(src, dest, {
+    recursive: true,
+    filter: (srcPath) => !String(srcPath).includes(`${path.sep}node_modules${path.sep}`),
+  });
+}
+
+function copyBundledSetupScripts(root) {
+  if (!app.isPackaged) {
+    const devSetup = path.join(__dirname, '..', 'setup', 'scripts', 'Start-CaisseApi.ps1');
+    const dest = path.join(root, 'setup', 'scripts', 'Start-CaisseApi.ps1');
+    if (fs.existsSync(devSetup)) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      if (!fs.existsSync(dest)) fs.copyFileSync(devSetup, dest);
+    }
+    const devCmd = path.join(__dirname, '..', 'Caisse.cmd');
+    const cmdDest = path.join(root, 'Caisse.cmd');
+    if (fs.existsSync(devCmd) && !fs.existsSync(cmdDest)) {
+      fs.copyFileSync(devCmd, cmdDest);
+    }
+    return;
+  }
+
+  const ps1Bundled = path.join(process.resourcesPath, 'setup', 'scripts', 'Start-CaisseApi.ps1');
+  const ps1Dest = path.join(root, 'setup', 'scripts', 'Start-CaisseApi.ps1');
+  if (fs.existsSync(ps1Bundled)) {
+    fs.mkdirSync(path.dirname(ps1Dest), { recursive: true });
+    if (!fs.existsSync(ps1Dest)) fs.copyFileSync(ps1Bundled, ps1Dest);
+  }
+}
+
+function populateStandardCaisseRoot(fromRoot) {
+  const root = getStandardCaisseRoot();
+  if (isValidCaisseHome(root)) return true;
+
+  fs.mkdirSync(path.join(root, 'setup', 'logs'), { recursive: true });
+
+  const apiDir = path.join(root, 'caisse_api');
+  const registryHome = readHomePathFromRegistry();
+  const sources = [fromRoot, registryHome, path.join(__dirname, '..')]
+    .filter(Boolean)
+    .filter((dir) => isValidCaisseHome(dir));
+
+  for (const src of sources) {
+    if (src.toLowerCase() === root.toLowerCase()) continue;
+    try {
+      copyTreeFiltered(path.join(src, 'caisse_api'), apiDir);
+      const setupSrc = path.join(src, 'setup');
+      if (fs.existsSync(setupSrc)) {
+        copyTreeFiltered(setupSrc, path.join(root, 'setup'));
+      }
+      const cmdSrc = path.join(src, 'Caisse.cmd');
+      if (fs.existsSync(cmdSrc) && !fs.existsSync(path.join(root, 'Caisse.cmd'))) {
+        fs.copyFileSync(cmdSrc, path.join(root, 'Caisse.cmd'));
+      }
+      if (isValidCaisseHome(root)) break;
+    } catch (_) {
+      /* try next source */
+    }
+  }
+
+  if (!isValidCaisseHome(root)) {
+    const bundled = getBundledApiSource();
+    if (bundled) {
+      copyTreeFiltered(bundled, apiDir);
+    }
+  }
+
+  copyBundledSetupScripts(root);
+  return isValidCaisseHome(root);
+}
+
 function findCaisseCmdRoot() {
   const seen = new Set();
-  const candidates = [];
+  const candidates = [getStandardCaisseRoot()];
 
   if (process.env.CAISSE_HOME) {
     candidates.push(process.env.CAISSE_HOME.trim());
@@ -103,31 +185,22 @@ function getBundledApiSource() {
 }
 
 function getWritableCaisseHome() {
-  const withCmd = findCaisseCmdRoot();
-  if (withCmd) return withCmd;
+  const standard = getStandardCaisseRoot();
 
-  const existing = readHomePathFromRegistry();
-  if (existing) return existing;
-
-  const bundled = getBundledApiSource();
-  const home = path.join(process.env.LOCALAPPDATA || '', 'Caisse', 'app-data');
-  const apiDir = path.join(home, 'caisse_api');
-
-  if (!fs.existsSync(path.join(apiDir, 'server.js')) && bundled) {
-    fs.mkdirSync(home, { recursive: true });
-    fs.cpSync(bundled, apiDir, {
-      recursive: true,
-      filter: (src) => !String(src).includes(`${path.sep}node_modules${path.sep}`),
-    });
+  if (isValidCaisseHome(standard)) {
+    return standard;
   }
 
-  if (fs.existsSync(path.join(apiDir, 'server.js'))) {
-    return home;
+  const legacy = findCaisseCmdRoot();
+  if (populateStandardCaisseRoot(legacy)) {
+    return standard;
   }
 
   let dir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..');
   for (let i = 0; i < 8; i += 1) {
-    if (isValidCaisseHome(dir)) return dir;
+    if (isValidCaisseHome(dir) && populateStandardCaisseRoot(dir)) {
+      return standard;
+    }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -137,6 +210,9 @@ function getWritableCaisseHome() {
 }
 
 function saveHomePath(caisseHome) {
+  const root = getStandardCaisseRoot();
+  const content = isValidCaisseHome(root) ? root : caisseHome.trim();
+
   const targets = [
     path.join(process.env.PROGRAMDATA || '', 'Caisse'),
     path.join(process.env.LOCALAPPDATA || '', 'Caisse'),
@@ -144,10 +220,17 @@ function saveHomePath(caisseHome) {
   for (const dir of targets) {
     try {
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, 'home.path'), caisseHome.trim(), 'utf8');
+      fs.writeFileSync(path.join(dir, 'home.path'), content, 'utf8');
     } catch (_) {
       /* ignore */
     }
+  }
+
+  try {
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, 'home.path'), content, 'utf8');
+  } catch (_) {
+    /* ignore */
   }
 }
 
@@ -355,7 +438,7 @@ async function prepareCaisseBackend() {
     return {
       ok: false,
       error:
-        'Dossier Caisse introuvable. Placez caisse_api et Caisse.cmd ensemble, ou reinstallez.',
+        'Dossier Caisse introuvable. Copiez caisse_api et setup dans C:\\caisse (ou definissez CAISSE_HOME).',
     };
   }
 
@@ -421,6 +504,7 @@ module.exports = {
   ensureBackendRunning,
   prepareCaisseBackend,
   getWritableCaisseHome,
+  getStandardCaisseRoot,
   findCaisseCmdRoot,
   isApiUp,
 };

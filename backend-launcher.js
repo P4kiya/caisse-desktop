@@ -4,14 +4,43 @@ const http = require('http');
 const { spawn, spawnSync } = require('child_process');
 const { app } = require('electron');
 
-const DEFAULT_ENV = `MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=asas
-MYSQL_DATABASE=caisse
-PORT=3000
-API_BASE_URL=http://localhost:3000
-`;
+const DEFAULT_ENV_LINES = {
+  MYSQL_HOST: 'localhost',
+  MYSQL_PORT: '3306',
+  MYSQL_USER: 'root',
+  MYSQL_PASSWORD: 'asas',
+  MYSQL_DATABASE: 'caisse',
+  PORT: '3000',
+  API_BASE_URL: 'http://localhost:3000',
+};
+
+function parseEnvFile(content) {
+  const vars = { ...DEFAULT_ENV_LINES };
+  for (const line of String(content).split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const m = trimmed.match(/^([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    vars[m[1]] = m[2].trim().replace(/^["']|["']$/g, '');
+  }
+  return vars;
+}
+
+function formatEnvFile(vars) {
+  return [
+    '# MySQL Server (mot de passe = celui choisi a l installation MySQL)',
+    `MYSQL_HOST=${vars.MYSQL_HOST}`,
+    `MYSQL_PORT=${vars.MYSQL_PORT}`,
+    `MYSQL_USER=${vars.MYSQL_USER}`,
+    `MYSQL_PASSWORD=${vars.MYSQL_PASSWORD}`,
+    `MYSQL_DATABASE=${vars.MYSQL_DATABASE}`,
+    `PORT=${vars.PORT}`,
+    '',
+    '# URL de l API pour l application Caisse',
+    `API_BASE_URL=${vars.API_BASE_URL}`,
+    '',
+  ].join('\n');
+}
 
 /** Dossier d installation standard sur tous les PC client */
 function getStandardCaisseRoot() {
@@ -236,10 +265,18 @@ function saveHomePath(caisseHome) {
 
 function ensureEnvFile(caisseHome) {
   const apiEnv = path.join(caisseHome, 'caisse_api', '.env');
-  if (!fs.existsSync(apiEnv)) {
-    fs.mkdirSync(path.dirname(apiEnv), { recursive: true });
-    fs.writeFileSync(apiEnv, DEFAULT_ENV, 'utf8');
+  const setupConfig = path.join(caisseHome, 'setup', 'config.env');
+
+  let vars = { ...DEFAULT_ENV_LINES };
+  if (fs.existsSync(apiEnv)) {
+    vars = { ...vars, ...parseEnvFile(fs.readFileSync(apiEnv, 'utf8')) };
   }
+  if (fs.existsSync(setupConfig)) {
+    vars = { ...vars, ...parseEnvFile(fs.readFileSync(setupConfig, 'utf8')) };
+  }
+
+  fs.mkdirSync(path.dirname(apiEnv), { recursive: true });
+  fs.writeFileSync(apiEnv, formatEnvFile(vars), 'utf8');
 }
 
 function resolveNodeExecutable() {

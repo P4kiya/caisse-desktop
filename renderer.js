@@ -607,7 +607,8 @@ async function printSaleReceipt(order, { quiet = false } = {}) {
 
   try {
     await window.caissePrint.printReceipt(order, {
-      silent: window.caissePrint.defaultSilent,
+      silent: window.caissePrint.defaultSilent !== false,
+      deviceName: window.caissePrint.deviceName || undefined,
     });
     if (!quiet) {
       showToast({

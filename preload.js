@@ -16,7 +16,9 @@ const apiBaseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace
 
 const shopName = (process.env.SHOP_NAME || 'Caisse').trim() || 'Caisse';
 const printAuto = process.env.PRINT_AUTO !== '0';
-const printSilent = process.env.PRINT_SILENT === '1';
+// Default: print directly to the default printer (no dialog, no PDF file).
+const printSilent = process.env.PRINT_SILENT !== '0';
+const printDeviceName = (process.env.PRINT_PRINTER || '').trim();
 
 const UPDATE_CHANNELS = [
   'update-checking',
@@ -57,6 +59,7 @@ contextBridge.exposeInMainWorld('caissePrint', {
   shopName,
   autoPrint: printAuto,
   defaultSilent: printSilent,
+  deviceName: printDeviceName,
   printReceipt: (order, options) =>
     ipcRenderer.invoke('print-receipt', { order, options }),
 });

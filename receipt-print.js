@@ -194,27 +194,35 @@ function printOrderReceipt(order, options = {}) {
     };
 
     win.webContents.once('did-finish-load', () => {
-      const printOptions = {
-        silent: Boolean(options.silent),
-        printBackground: true,
-        pageSize: 'A5',
-        margins: {
-          marginType: 'custom',
-          top: 0.4,
-          bottom: 0.4,
-          left: 0.45,
-          right: 0.45,
-        },
+      const runPrint = () => {
+        const printOptions = {
+          silent: options.silent !== false,
+          printBackground: true,
+          pageSize: 'A5',
+          margins: {
+            marginType: 'custom',
+            top: 0.4,
+            bottom: 0.4,
+            left: 0.45,
+            right: 0.45,
+          },
+        };
+
+        if (options.deviceName) {
+          printOptions.deviceName = options.deviceName;
+        }
+
+        win.webContents.print(printOptions, (success, failureReason) => {
+          cleanup();
+          if (success) {
+            resolve({ ok: true });
+          } else {
+            reject(new Error(failureReason || 'Impression annulée'));
+          }
+        });
       };
 
-      win.webContents.print(printOptions, (success, failureReason) => {
-        cleanup();
-        if (success) {
-          resolve({ ok: true });
-        } else {
-          reject(new Error(failureReason || 'Impression annulée'));
-        }
-      });
+      setTimeout(runPrint, 150);
     });
 
     win.webContents.once('did-fail-load', (_event, code, description) => {

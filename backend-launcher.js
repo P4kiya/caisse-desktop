@@ -33,15 +33,11 @@ function readApiPort(caisseHome) {
   return 3000;
 }
 
-function getBundledApiSource() {
-  if (!app.isPackaged) {
-    const dev = path.join(__dirname, '..', 'caisse_api');
-    if (fs.existsSync(path.join(dev, 'server.js'))) return dev;
-    return null;
-  }
-  const bundled = path.join(process.resourcesPath, 'caisse_api');
-  if (fs.existsSync(path.join(bundled, 'server.js'))) return bundled;
-  return null;
+function isValidCaisseHome(dir) {
+  return (
+    dir &&
+    fs.existsSync(path.join(dir, 'caisse_api', 'server.js'))
+  );
 }
 
 function readHomePathFromRegistry() {
@@ -53,9 +49,7 @@ function readHomePathFromRegistry() {
     try {
       if (fs.existsSync(file)) {
         const root = fs.readFileSync(file, 'utf8').trim();
-        if (root && fs.existsSync(path.join(root, 'caisse_api', 'server.js'))) {
-          return root;
-        }
+        if (isValidCaisseHome(root)) return root;
       }
     } catch (_) {
       /* ignore */
@@ -64,7 +58,54 @@ function readHomePathFromRegistry() {
   return null;
 }
 
+function findCaisseCmdRoot() {
+  const seen = new Set();
+  const candidates = [];
+
+  if (process.env.CAISSE_HOME) {
+    candidates.push(process.env.CAISSE_HOME.trim());
+  }
+
+  const fromRegistry = readHomePathFromRegistry();
+  if (fromRegistry) candidates.push(fromRegistry);
+
+  let dir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..');
+  for (let i = 0; i < 10; i += 1) {
+    candidates.push(dir);
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  candidates.push(path.join(__dirname, '..'));
+
+  for (const root of candidates) {
+    if (!root || seen.has(root)) continue;
+    seen.add(root);
+    const cmd = path.join(root, 'Caisse.cmd');
+    if (fs.existsSync(cmd) && isValidCaisseHome(root)) {
+      return root;
+    }
+  }
+
+  return null;
+}
+
+function getBundledApiSource() {
+  if (!app.isPackaged) {
+    const dev = path.join(__dirname, '..', 'caisse_api');
+    if (fs.existsSync(path.join(dev, 'server.js'))) return dev;
+    return null;
+  }
+  const bundled = path.join(process.resourcesPath, 'caisse_api');
+  if (fs.existsSync(path.join(bundled, 'server.js'))) return bundled;
+  return null;
+}
+
 function getWritableCaisseHome() {
+  const withCmd = findCaisseCmdRoot();
+  if (withCmd) return withCmd;
+
   const existing = readHomePathFromRegistry();
   if (existing) return existing;
 
@@ -86,9 +127,7 @@ function getWritableCaisseHome() {
 
   let dir = app.isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..');
   for (let i = 0; i < 8; i += 1) {
-    if (fs.existsSync(path.join(dir, 'caisse_api', 'server.js'))) {
-      return dir;
-    }
+    if (isValidCaisseHome(dir)) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -120,99 +159,63 @@ function ensureEnvFile(caisseHome) {
   }
 }
 
-function resolveNodeExecutable() {
-  const fromPath = process.env.PATH?.split(';')
-    .map((p) => path.join(p.trim(), 'node.exe'))
-    .find((p) => p && fs.existsSync(p));
-  if (fromPath) return fromPath;
+function resolveStartScript(caisseHome) {
+  const inProject = path.join(caisseHome, 'setup', 'scripts', 'Start-CaisseApi.ps1');
+  if (fs.existsSync(inProject)) return inProject;
 
-  const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  const candidates = [
-    path.join(programFiles, 'nodejs', 'node.exe'),
-    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'nodejs', 'node.exe'),
-  ];
-  return candidates.find((p) => fs.existsSync(p)) || null;
+  if (app.isPackaged) {
+    const bundled = path.join(process.resourcesPath, 'setup', 'scripts', 'Start-CaisseApi.ps1');
+    if (fs.existsSync(bundled)) return bundled;
+  }
+
+  return null;
 }
 
-function resolveNpmExecutable() {
-  const fromPath = process.env.PATH?.split(';')
-    .map((p) => path.join(p.trim(), 'npm.cmd'))
-    .find((p) => p && fs.existsSync(p));
-  if (fromPath) return fromPath;
-  const node = resolveNodeExecutable();
-  if (node) {
-    const npm = path.join(path.dirname(node), 'npm.cmd');
-    if (fs.existsSync(npm)) return npm;
-  }
-  return 'npm.cmd';
-}
-
-function ensureApiDependencies(caisseHome) {
-  const apiDir = path.join(caisseHome, 'caisse_api');
-  const nodeModules = path.join(apiDir, 'node_modules');
-  const flag = path.join(caisseHome, 'setup', 'logs', 'npm-ready.flag');
-
-  if (fs.existsSync(nodeModules) && fs.existsSync(flag)) {
-    return { ok: true, skipped: true };
+function startApiViaCaisseCmd(caisseHome) {
+  const cmdPath = path.join(caisseHome, 'Caisse.cmd');
+  if (fs.existsSync(cmdPath)) {
+    const child = spawn('cmd.exe', ['/c', cmdPath, '--api-only'], {
+      cwd: caisseHome,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+    return { method: 'Caisse.cmd', pid: child.pid };
   }
 
-  if (!resolveNodeExecutable()) {
-    return {
-      ok: false,
-      error:
-        'Node.js n est pas installe. Installez Node.js ou utilisez Caisse.cmd une fois.',
-    };
+  const ps1 = resolveStartScript(caisseHome);
+  if (!ps1) {
+    throw new Error('Caisse.cmd et Start-CaisseApi.ps1 introuvables');
   }
 
-  const npm = resolveNpmExecutable();
-  const result = spawnSync(npm, ['install', '--omit=dev'], {
-    cwd: apiDir,
-    windowsHide: true,
-    timeout: 600000,
-    env: { ...process.env },
-    encoding: 'utf8',
-  });
-
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').slice(-500);
-    return {
-      ok: false,
-      error: `npm install a echoue. ${detail || 'Verifiez que Node.js est installe.'}`,
-    };
-  }
-
-  fs.mkdirSync(path.dirname(flag), { recursive: true });
-  fs.writeFileSync(flag, new Date().toISOString(), 'utf8');
-  return { ok: true, skipped: false };
-}
-
-async function prepareCaisseBackend() {
-  const home = getWritableCaisseHome();
-  if (!home) {
-    return {
-      ok: false,
-      error:
-        'Fichiers serveur introuvables. Reinstallez Caisse ou placez le dossier caisse_api a cote de l application.',
-    };
-  }
-
-  fs.mkdirSync(path.join(home, 'setup', 'logs'), { recursive: true });
-  ensureEnvFile(home);
-  saveHomePath(home);
-
-  const deps = ensureApiDependencies(home);
-  if (!deps.ok) {
-    return { ok: false, error: deps.error, home };
-  }
-
-  return { ok: true, home, firstDepsInstall: !deps.skipped };
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      ps1,
+      '-ProjectRoot',
+      caisseHome,
+    ],
+    {
+      cwd: caisseHome,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    },
+  );
+  child.unref();
+  return { method: 'Start-CaisseApi.ps1', pid: child.pid };
 }
 
 function isApiUp(port = 3000) {
   return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${port}/`, { timeout: 2000 }, (res) => {
+    const req = http.get(`http://127.0.0.1:${port}/stats?period=today`, { timeout: 2000 }, (res) => {
       res.resume();
-      resolve(true);
+      resolve(res.statusCode >= 200 && res.statusCode < 600);
     });
     req.on('error', () => resolve(false));
     req.on('timeout', () => {
@@ -222,35 +225,7 @@ function isApiUp(port = 3000) {
   });
 }
 
-function startApiHidden(caisseHome) {
-  const apiDir = path.join(caisseHome, 'caisse_api');
-  const serverJs = path.join(apiDir, 'server.js');
-  const logDir = path.join(caisseHome, 'setup', 'logs');
-  fs.mkdirSync(logDir, { recursive: true });
-
-  const logOut = fs.openSync(path.join(logDir, 'api.log'), 'a');
-  const logErr = fs.openSync(path.join(logDir, 'api-error.log'), 'a');
-
-  const node = resolveNodeExecutable();
-  if (!node) {
-    throw new Error('Node.js introuvable');
-  }
-
-  const ts = new Date().toISOString();
-  fs.appendFileSync(path.join(logDir, 'api.log'), `\n--- Demarrage API ${ts} (DB auto si besoin) ---\n`);
-
-  const child = spawn(node, [serverJs], {
-    cwd: apiDir,
-    detached: true,
-    stdio: ['ignore', logOut, logErr],
-    windowsHide: true,
-    env: { ...process.env },
-  });
-  child.unref();
-  return child.pid;
-}
-
-function readApiLogTail(caisseHome, lines = 8) {
+function readApiLogTail(caisseHome, lines = 10) {
   try {
     const logPath = path.join(caisseHome, 'setup', 'logs', 'api-error.log');
     if (!fs.existsSync(logPath)) return '';
@@ -259,6 +234,23 @@ function readApiLogTail(caisseHome, lines = 8) {
   } catch (_) {
     return '';
   }
+}
+
+async function prepareCaisseBackend() {
+  const home = getWritableCaisseHome();
+  if (!home) {
+    return {
+      ok: false,
+      error:
+        'Dossier Caisse introuvable. Placez caisse_api et Caisse.cmd ensemble, ou reinstallez.',
+    };
+  }
+
+  fs.mkdirSync(path.join(home, 'setup', 'logs'), { recursive: true });
+  ensureEnvFile(home);
+  saveHomePath(home);
+
+  return { ok: true, home, usesCmd: fs.existsSync(path.join(home, 'Caisse.cmd')) };
 }
 
 async function ensureBackendRunning() {
@@ -275,12 +267,14 @@ async function ensureBackendRunning() {
   }
 
   try {
-    startApiHidden(home);
+    const started = startApiViaCaisseCmd(home);
+    prepared.startMethod = started.method;
   } catch (err) {
     return { ok: false, error: err.message || String(err), home };
   }
 
-  for (let i = 0; i < 50; i += 1) {
+  const maxAttempts = 60;
+  for (let i = 0; i < maxAttempts; i += 1) {
     await new Promise((r) => setTimeout(r, 500));
     if (await isApiUp(port)) {
       return {
@@ -288,7 +282,7 @@ async function ensureBackendRunning() {
         alreadyRunning: false,
         home,
         port,
-        firstDepsInstall: prepared.firstDepsInstall,
+        startMethod: prepared.startMethod,
       };
     }
   }
@@ -296,11 +290,11 @@ async function ensureBackendRunning() {
   const tail = readApiLogTail(home);
   const hint = tail
     ? `\n\n${tail}`
-    : '\n\nVerifiez que MySQL est installe et demarre (port 3306).';
+    : '\n\nVerifiez Node.js, MySQL (port 3306) et le dossier caisse_api.';
 
   return {
     ok: false,
-    error: `Le serveur ne demarre pas.${hint}`,
+    error: `Le serveur ne repond pas sur le port ${port}.${hint}`,
     home,
   };
 }
@@ -309,5 +303,6 @@ module.exports = {
   ensureBackendRunning,
   prepareCaisseBackend,
   getWritableCaisseHome,
+  findCaisseCmdRoot,
   isApiUp,
 };

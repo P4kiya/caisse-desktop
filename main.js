@@ -75,13 +75,25 @@ app.whenReady().then(async () => {
   setupUpdaterIpc(ipcMain);
   Menu.setApplicationMenu(null);
 
-  const backend = await ensureBackendRunning();
+  let backend = await ensureBackendRunning();
   if (!backend.ok) {
-    dialog.showErrorBox(
-      'Caisse — serveur indisponible',
-      backend.error ||
-        'Impossible de demarrer le serveur. Verifiez que MySQL est installe et demarre.',
-    );
+    const retry = dialog.showMessageBoxSync({
+      type: 'error',
+      title: 'Caisse — serveur indisponible',
+      message: 'Le serveur local ne demarre pas',
+      detail:
+        backend.error ||
+        'Verifiez que Node.js et MySQL sont installes, puis reessayez.',
+      buttons: ['Reessayer', 'Ouvrir quand meme'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (retry === 0) {
+      backend = await ensureBackendRunning();
+      if (!backend.ok) {
+        dialog.showErrorBox('Caisse — serveur indisponible', backend.error);
+      }
+    }
   } else if (backend.firstDepsInstall) {
     console.log('Premiere configuration du serveur terminee (base de donnees creee si besoin).');
   }

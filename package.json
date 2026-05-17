@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "1.3.19",
+  "version": "1.3.20",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -49,6 +49,10 @@
         "from": "../caisse_api",
         "to": "caisse_api",
         "filter": ["**/*", "!node_modules/**/*"]
+      },
+      {
+        "from": "../setup/scripts/Start-CaisseApi.ps1",
+        "to": "setup/scripts/Start-CaisseApi.ps1"
       }
     ],
     "publish": [

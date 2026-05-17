@@ -1,8 +1,10 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { setupUpdaterIpc, attachMainWindow } = require('./updater');
 const { ensureBackendRunning } = require('./backend-launcher');
+const { printOrderReceipt } = require('./receipt-print');
 
 let mainWindow = null;
 
@@ -70,6 +72,14 @@ function createWindow() {
     attachMainWindow(null);
   });
 }
+
+ipcMain.handle('print-receipt', async (_event, payload) => {
+  const { order, options = {} } = payload || {};
+  const shopName = process.env.SHOP_NAME || 'Caisse';
+  const silent = options.silent ?? process.env.PRINT_SILENT === '1';
+  await printOrderReceipt(order, { shopName, silent, ...options });
+  return { ok: true };
+});
 
 app.whenReady().then(async () => {
   setupUpdaterIpc(ipcMain);

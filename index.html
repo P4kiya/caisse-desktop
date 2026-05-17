@@ -1341,6 +1341,17 @@
         background: var(--primary-soft);
       }
 
+      .btn-entry.btn-print {
+        border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+        color: var(--primary);
+      }
+
+      .btn-entry.btn-print:hover:not(:disabled) {
+        border-color: var(--primary);
+        color: var(--on-primary);
+        background: var(--primary);
+      }
+
       .btn-entry.btn-delete:hover:not(:disabled) {
         border-color: var(--error);
         color: var(--error);

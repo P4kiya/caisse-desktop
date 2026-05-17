@@ -595,6 +595,33 @@ function formatSavedAt(value) {
   return date.toLocaleString(LOCALE);
 }
 
+async function printSaleReceipt(order, { quiet = false } = {}) {
+  if (!order?.id) return;
+
+  if (!window.caissePrint?.printReceipt) {
+    if (!quiet) {
+      setStatus('Impression non disponible.', 'error');
+    }
+    return;
+  }
+
+  try {
+    await window.caissePrint.printReceipt(order, {
+      silent: window.caissePrint.defaultSilent,
+    });
+    if (!quiet) {
+      showToast({
+        title: 'Impression',
+        message: `Ticket de la vente #${order.id} envoyé à l'imprimante.`,
+      });
+    }
+  } catch (err) {
+    if (!quiet) {
+      setStatus(`Impression : ${err.message}`, 'error');
+    }
+  }
+}
+
 function renderKpis(stats) {
   if (!stats) return;
 
@@ -658,6 +685,7 @@ function renderList(orders) {
       <div class="entry-details">
         <ul class="order-lines">${linesHtml}</ul>
         <div class="entry-actions">
+          <button type="button" class="btn-entry btn-print" data-action="print">Imprimer</button>
           <button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
           <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>
         </div>
@@ -739,6 +767,8 @@ async function submitOrder() {
       );
     }
 
+    const savedOrder = body?.id ? body : null;
+
     resetForm();
     await fetchData();
     setStatus('');
@@ -753,6 +783,10 @@ async function submitOrder() {
             message: 'La vente a été ajoutée avec succès.',
           },
     );
+
+    if (!isEdit && savedOrder && window.caissePrint?.autoPrint) {
+      await printSaleReceipt(savedOrder, { quiet: true });
+    }
   } catch (err) {
     setStatus(
       isEdit
@@ -902,6 +936,14 @@ listEl.addEventListener('click', (event) => {
   }
 
   if (actionEl.disabled) return;
+
+  if (actionEl.dataset.action === 'print') {
+    const order = lastOrders.find((row) => row.id === id);
+    if (order) {
+      printSaleReceipt(order);
+    }
+    return;
+  }
 
   if (actionEl.dataset.action === 'edit') {
     const order = lastOrders.find((row) => row.id === id);

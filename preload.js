@@ -14,6 +14,10 @@ const apiBaseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace
   '',
 );
 
+const shopName = (process.env.SHOP_NAME || 'Caisse').trim() || 'Caisse';
+const printAuto = process.env.PRINT_AUTO !== '0';
+const printSilent = process.env.PRINT_SILENT === '1';
+
 const UPDATE_CHANNELS = [
   'update-checking',
   'update-check-result',
@@ -47,6 +51,14 @@ contextBridge.exposeInMainWorld('caisseConfig', {
 
 contextBridge.exposeInMainWorld('caisseApp', {
   version: bundledVersion,
+});
+
+contextBridge.exposeInMainWorld('caissePrint', {
+  shopName,
+  autoPrint: printAuto,
+  defaultSilent: printSilent,
+  printReceipt: (order, options) =>
+    ipcRenderer.invoke('print-receipt', { order, options }),
 });
 
 contextBridge.exposeInMainWorld('caisseUpdater', {

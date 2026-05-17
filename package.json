@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "1.3.17",
+  "version": "1.3.18",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -10,7 +10,7 @@
     "dev": "electron .",
     "dist": "electron-builder --win",
     "dist:dir": "electron-builder --win --dir",
-    "dist:publish": "electron-builder --win --publish always"
+    "dist:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-win.ps1 -Publish"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
@@ -26,6 +26,7 @@
     "productName": "Caisse",
     "files": [
       "main.js",
+      "backend-launcher.js",
       "updater.js",
       "preload.js",
       "package.json",

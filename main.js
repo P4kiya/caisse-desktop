@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { setupUpdaterIpc, attachMainWindow } = require('./updater');
+const { ensureBackendRunning } = require('./backend-launcher');
 
 let mainWindow = null;
 
@@ -58,9 +59,19 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   setupUpdaterIpc(ipcMain);
   Menu.setApplicationMenu(null);
+
+  const backend = await ensureBackendRunning();
+  if (!backend.ok) {
+    dialog.showErrorBox(
+      'Caisse — serveur indisponible',
+      backend.error ||
+        'Impossible de demarrer le serveur. Executez Caisse.cmd dans le dossier d installation.',
+    );
+  }
+
   createWindow();
 
   app.on('activate', () => {

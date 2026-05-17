@@ -76,12 +76,11 @@ function createWindow() {
 ipcMain.handle('print-receipt', async (_event, payload) => {
   const { order, options = {} } = payload || {};
   const shopName = process.env.SHOP_NAME || 'Caisse';
-  const silent = options.silent ?? process.env.PRINT_SILENT !== '0';
   const deviceName =
     options.deviceName ||
     (process.env.PRINT_PRINTER || '').trim() ||
     undefined;
-  await printOrderReceipt(order, { shopName, silent, deviceName, ...options });
+  await printOrderReceipt(order, { shopName, deviceName, ...options });
   return { ok: true };
 });
 

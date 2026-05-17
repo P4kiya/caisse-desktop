@@ -37,6 +37,52 @@ function orderTotal(order) {
   );
 }
 
+function isVirtualPrinterName(name) {
+  const n = String(name || '').toLowerCase();
+  return (
+    n.includes('pdf') ||
+    n.includes('xps') ||
+    n.includes('onenote') ||
+    n.includes('fax') ||
+    n.includes('microsoft print') ||
+    n.includes('send to') ||
+    n.includes('document writer')
+  );
+}
+
+async function resolvePhysicalPrinter(webContents, preferredName) {
+  const printers = await webContents.getPrintersAsync();
+  if (!Array.isArray(printers) || printers.length === 0) {
+    throw new Error('Aucune imprimante detectee sur ce PC.');
+  }
+
+  if (preferredName) {
+    const preferred = printers.find((p) => p.name === preferredName);
+    if (preferred) {
+      if (isVirtualPrinterName(preferred.name)) {
+        throw new Error(
+          `L'imprimante « ${preferred.name} » est une imprimante PDF virtuelle. Utilisez une imprimante physique.`,
+        );
+      }
+      return preferred.name;
+    }
+  }
+
+  const defaultPrinter = printers.find((p) => p.isDefault);
+  if (defaultPrinter && !isVirtualPrinterName(defaultPrinter.name)) {
+    return defaultPrinter.name;
+  }
+
+  const physical = printers.find((p) => !isVirtualPrinterName(p.name));
+  if (physical) {
+    return physical.name;
+  }
+
+  throw new Error(
+    'Imprimante physique introuvable. Dans Windows : Parametres > Bluetooth et appareils > Imprimantes, definissez votre imprimante ticket (pas « Microsoft Print to PDF ») comme imprimante par defaut. Vous pouvez aussi ajouter PRINT_PRINTER=nom exact dans caisse-desktop\\.env',
+  );
+}
+
 function buildReceiptHtml(order, options = {}) {
   const shopName = options.shopName || 'Caisse';
   const items = order.items || [];
@@ -194,35 +240,40 @@ function printOrderReceipt(order, options = {}) {
     };
 
     win.webContents.once('did-finish-load', () => {
-      const runPrint = () => {
-        const printOptions = {
-          silent: options.silent !== false,
-          printBackground: true,
-          pageSize: 'A5',
-          margins: {
-            marginType: 'custom',
-            top: 0.4,
-            bottom: 0.4,
-            left: 0.45,
-            right: 0.45,
-          },
-        };
+      setTimeout(async () => {
+        try {
+          const deviceName = await resolvePhysicalPrinter(
+            win.webContents,
+            options.deviceName,
+          );
 
-        if (options.deviceName) {
-          printOptions.deviceName = options.deviceName;
-        }
+          const printOptions = {
+            silent: true,
+            deviceName,
+            printBackground: true,
+            pageSize: 'A5',
+            margins: {
+              marginType: 'custom',
+              top: 0.4,
+              bottom: 0.4,
+              left: 0.45,
+              right: 0.45,
+            },
+          };
 
-        win.webContents.print(printOptions, (success, failureReason) => {
+          win.webContents.print(printOptions, (success, failureReason) => {
+            cleanup();
+            if (success) {
+              resolve({ ok: true, deviceName });
+            } else {
+              reject(new Error(failureReason || 'Impression annulee'));
+            }
+          });
+        } catch (err) {
           cleanup();
-          if (success) {
-            resolve({ ok: true });
-          } else {
-            reject(new Error(failureReason || 'Impression annulée'));
-          }
-        });
-      };
-
-      setTimeout(runPrint, 150);
+          reject(err);
+        }
+      }, 200);
     });
 
     win.webContents.once('did-fail-load', (_event, code, description) => {
@@ -237,4 +288,9 @@ function printOrderReceipt(order, options = {}) {
   });
 }
 
-module.exports = { printOrderReceipt, buildReceiptHtml };
+module.exports = {
+  printOrderReceipt,
+  buildReceiptHtml,
+  resolvePhysicalPrinter,
+  isVirtualPrinterName,
+};

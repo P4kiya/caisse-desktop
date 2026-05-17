@@ -9,6 +9,7 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http: https:"
     />
     <title>Caisse</title>
+    <link rel="icon" type="image/png" href="build/icon.png" />
     <style>
       :root,
       [data-theme='light'] {
@@ -107,6 +108,20 @@
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+
+      .app-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .app-logo {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+        object-fit: contain;
       }
 
       .app-header h1 {
@@ -1357,7 +1372,10 @@
   <body>
     <header class="app-header">
       <div class="app-header-inner">
-        <h1>Caisse <span class="app-version" id="appVersion" aria-label="Version"></span></h1>
+        <div class="app-brand">
+          <img src="build/icon.png" alt="" class="app-logo" width="36" height="36" />
+          <h1>Caisse <span class="app-version" id="appVersion" aria-label="Version"></span></h1>
+        </div>
         <div class="header-actions">
           <button
             type="button"

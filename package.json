@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "1.3.18",
+  "version": "1.3.19",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -8,6 +8,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "icons": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-icon.ps1",
+    "predist": "npm run icons",
     "dist": "electron-builder --win",
     "dist:dir": "electron-builder --win --dir",
     "dist:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-win.ps1 -Publish"
@@ -24,6 +26,7 @@
   "build": {
     "appId": "com.caisse.desktop",
     "productName": "Caisse",
+    "icon": "build/icon.png",
     "files": [
       "main.js",
       "backend-launcher.js",
@@ -34,11 +37,20 @@
       "renderer.js",
       "theme.js",
       "update-ui.js",
+      "build/icon.png",
+      "logo-2.png",
       ".env"
     ],
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": "../caisse_api",
+        "to": "caisse_api",
+        "filter": ["**/*", "!node_modules/**/*"]
+      }
+    ],
     "publish": [
       {
         "provider": "github",
@@ -47,6 +59,7 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

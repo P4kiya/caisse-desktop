@@ -30,12 +30,16 @@ if ($Publish -and $env:GH_TOKEN) {
   npx electron-builder --win
 }
 
-$exe = Get-ChildItem dist -Filter 'Caisse Setup*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+$exe = Get-ChildItem dist -Filter 'Caisse Setup*.exe' -ErrorAction SilentlyContinue |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
 if ($exe) {
-  $dest = Join-Path $root "Caisse-Setup-$($exe.BaseName -replace 'Caisse Setup ','').exe"
-  Copy-Item $exe.FullName (Join-Path $root $exe.Name) -Force
+  $ver = ($exe.BaseName -replace '^Caisse Setup\s*', '').Trim()
+  $destName = "Caisse-Setup-$ver.exe"
+  $dest = Join-Path $root $destName
+  Copy-Item $exe.FullName $dest -Force
   Write-Host "OK : $($exe.FullName)"
-  Write-Host "Copie : $(Join-Path $root $exe.Name)"
+  Write-Host "Copie : $dest"
 } else {
   Write-Warning 'Installateur introuvable dans dist\'
 }

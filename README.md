@@ -54,9 +54,15 @@ Output:
 
 First build downloads Electron binaries; it can take a few minutes.
 
-### Optional: app icon
+### App icon
 
-Add `build/icon.ico` (256×256 recommended) and set in `package.json` under `build.win.icon` if you want a custom icon on the `.exe`.
+Place your artwork in `logo-2.png`, then run:
+
+```bash
+npm run icons
+```
+
+This generates `build/icon.png` and `build/icon.ico` (used by the window, taskbar, and installer).
 
 ### Code signing
 

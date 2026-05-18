@@ -42,13 +42,8 @@ function createAuthWindow() {
   authWindow = new BrowserWindow({
     width: 400,
     height: 580,
-    minWidth: 400,
-    maxWidth: 400,
-    minHeight: 580,
-    maxHeight: 580,
     resizable: false,
-    maximizable: false,
-    fullscreenable: false,
+    fullscreenable: true,
     backgroundColor: '#f5f4f1',
     ...(iconPath ? { icon: iconPath } : {}),
     show: false,
@@ -61,6 +56,7 @@ function createAuthWindow() {
   });
 
   authWindow.once('ready-to-show', () => {
+    authWindow.setFullScreen(true);
     authWindow.show();
     authWindow.focus();
   });
@@ -78,11 +74,8 @@ function createAuthWindow() {
 function createWindow() {
   const iconPath = resolveAppIconPath();
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 700,
-    minWidth: 800,
-    minHeight: 500,
     backgroundColor: '#f5f4f1',
+    fullscreenable: true,
     ...(iconPath ? { icon: iconPath } : {}),
     show: false,
     webPreferences: {
@@ -96,6 +89,7 @@ function createWindow() {
   attachMainWindow(mainWindow);
 
   mainWindow.once('ready-to-show', () => {
+    mainWindow.setFullScreen(true);
     mainWindow.show();
     mainWindow.focus();
   });

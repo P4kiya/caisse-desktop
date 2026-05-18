@@ -1256,6 +1256,53 @@
         color: #fff;
       }
 
+      .day-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        flex-shrink: 0;
+      }
+
+      .day-nav[hidden] {
+        display: none !important;
+      }
+
+      .day-nav-label {
+        min-width: 10rem;
+        text-align: center;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .day-nav-btn {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 1.1rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .day-nav-btn:hover:not(:disabled) {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: var(--primary-soft);
+      }
+
+      .day-nav-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
       .stats-heading {
         margin: 0 0 12px;
         font-size: 0.85rem;
@@ -1502,6 +1549,29 @@
           <button type="button" class="filter-btn" data-period="week">Semaine</button>
           <button type="button" class="filter-btn" data-period="month">Mois</button>
           <button type="button" class="filter-btn" data-period="all">Tout</button>
+        </div>
+
+        <div class="day-nav" id="dayNav" aria-label="Navigation par jour">
+          <button
+            type="button"
+            class="day-nav-btn"
+            id="dayPrevBtn"
+            title="Jour précédent"
+            aria-label="Jour précédent"
+          >
+            ←
+          </button>
+          <span class="day-nav-label" id="dayNavLabel">Aujourd'hui</span>
+          <button
+            type="button"
+            class="day-nav-btn"
+            id="dayNextBtn"
+            title="Jour suivant"
+            aria-label="Jour suivant"
+            disabled
+          >
+            →
+          </button>
         </div>
 
         <p class="stats-heading" id="statsHeading">

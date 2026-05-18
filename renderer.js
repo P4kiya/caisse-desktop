@@ -12,6 +12,7 @@ const PERIOD_LABELS = {
 };
 
 let currentPeriod = 'today';
+let viewDateKey = toDateKey(new Date());
 let editingId = null;
 let expandedOrderId = null;
 let editingLineIndex = null;
@@ -33,6 +34,10 @@ const draftTotalEl = document.getElementById('draftTotal');
 const statsHeading = document.getElementById('statsHeading');
 const listHeading = document.getElementById('listHeading');
 const filterButtons = document.querySelectorAll('.filter-btn');
+const dayNav = document.getElementById('dayNav');
+const dayPrevBtn = document.getElementById('dayPrevBtn');
+const dayNextBtn = document.getElementById('dayNextBtn');
+const dayNavLabel = document.getElementById('dayNavLabel');
 
 const kpiAmount = document.getElementById('kpiAmount');
 const kpiEntries = document.getElementById('kpiEntries');
@@ -407,19 +412,98 @@ function draftTotalAmount() {
   return draftLines.reduce((sum, line) => sum + lineTotal(line.price, line.quantity), 0);
 }
 
+function toDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseDateKey(key) {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function isTodayKey(key) {
+  return key === toDateKey(new Date());
+}
+
+function formatDayLabel(key) {
+  if (isTodayKey(key)) {
+    return PERIOD_LABELS.today;
+  }
+  return parseDateKey(key).toLocaleDateString(LOCALE, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function getPeriodDisplayLabel() {
+  if (currentPeriod === 'today') {
+    return formatDayLabel(viewDateKey);
+  }
+  return PERIOD_LABELS[currentPeriod] || currentPeriod;
+}
+
 function periodQuery() {
-  return `?period=${encodeURIComponent(currentPeriod)}`;
+  const params = new URLSearchParams({ period: currentPeriod });
+  if (currentPeriod === 'today') {
+    params.set('date', viewDateKey);
+  }
+  return `?${params}`;
+}
+
+function updateDayNavUi() {
+  const showDayNav = currentPeriod === 'today';
+  if (dayNav) {
+    dayNav.hidden = !showDayNav;
+  }
+  if (!showDayNav) {
+    return;
+  }
+
+  if (dayNavLabel) {
+    dayNavLabel.textContent = formatDayLabel(viewDateKey);
+  }
+  if (dayNextBtn) {
+    dayNextBtn.disabled = isTodayKey(viewDateKey);
+  }
 }
 
 function updatePeriodUi() {
-  const label = PERIOD_LABELS[currentPeriod] || currentPeriod;
+  const label = getPeriodDisplayLabel();
+  const listLabel = label.toLowerCase();
 
   filterButtons.forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.period === currentPeriod);
   });
 
+  updateDayNavUi();
   statsHeading.innerHTML = `Statistiques pour <strong>${label}</strong>`;
-  listHeading.textContent = `Ventes (${label.toLowerCase()})`;
+  listHeading.textContent = `Ventes (${listLabel})`;
+}
+
+function shiftViewDay(delta) {
+  if (currentPeriod !== 'today' || delta === 0) {
+    return;
+  }
+
+  if (delta > 0 && isTodayKey(viewDateKey)) {
+    return;
+  }
+
+  const next = parseDateKey(viewDateKey);
+  next.setDate(next.getDate() + delta);
+  const nextKey = toDateKey(next);
+
+  if (delta > 0 && nextKey > toDateKey(new Date())) {
+    return;
+  }
+
+  viewDateKey = nextKey;
+  fetchData();
 }
 
 function clearLineEdit() {
@@ -891,9 +975,24 @@ async function deleteOrder(id) {
 }
 
 function setPeriod(period) {
-  if (!PERIOD_LABELS[period] || period === currentPeriod) {
+  if (!PERIOD_LABELS[period]) {
     return;
   }
+
+  if (period === 'today') {
+    if (currentPeriod === 'today' && isTodayKey(viewDateKey)) {
+      return;
+    }
+    currentPeriod = 'today';
+    viewDateKey = toDateKey(new Date());
+    fetchData();
+    return;
+  }
+
+  if (period === currentPeriod) {
+    return;
+  }
+
   currentPeriod = period;
   fetchData();
 }
@@ -979,6 +1078,9 @@ listEl.addEventListener('keydown', (event) => {
 filterButtons.forEach((btn) => {
   btn.addEventListener('click', () => setPeriod(btn.dataset.period));
 });
+
+dayPrevBtn?.addEventListener('click', () => shiftViewDay(-1));
+dayNextBtn?.addEventListener('click', () => shiftViewDay(1));
 
 addLineBtn.addEventListener('click', addLineToDraft);
 submitOrderBtn.addEventListener('click', submitOrder);

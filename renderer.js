@@ -436,6 +436,21 @@ function isTodayKey(key) {
   return key === toDateKey(new Date());
 }
 
+function isOrderFromToday(savedAt) {
+  if (!savedAt) {
+    return false;
+  }
+  const date = new Date(savedAt);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  return toDateKey(date) === toDateKey(new Date());
+}
+
+function canModifyOrder(order) {
+  return isOrderFromToday(order?.savedAt);
+}
+
 function startOfWeekMonday(key) {
   const date = parseDateKey(key);
   const weekday = date.getDay();
@@ -674,6 +689,14 @@ function shiftPeriodNav(delta) {
   }
 }
 
+function showTodayAfterNewSale() {
+  const todayKey = toDateKey(new Date());
+  currentPeriod = 'today';
+  viewDateKey = todayKey;
+  viewWeekAnchor = todayKey;
+  viewMonthAnchor = todayKey;
+}
+
 function clearLineEdit() {
   editingLineIndex = null;
   priceInput.value = '';
@@ -828,6 +851,9 @@ function toggleOrderDetails(id) {
 }
 
 function startEdit(order) {
+  if (!canModifyOrder(order)) {
+    return;
+  }
   editingId = order.id;
   expandedOrderId = order.id;
   draftLines = order.items.map((item) => ({
@@ -927,6 +953,11 @@ function renderList(orders) {
           );
 
     const isExpanded = expandedOrderId === order.id;
+    const canModify = canModifyOrder(order);
+    const modifyActionsHtml = canModify
+      ? `<button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
+          <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>`
+      : '';
 
     li.innerHTML = `
       <div class="entry-summary" data-action="toggle" role="button" tabindex="0" aria-expanded="${isExpanded}">
@@ -934,16 +965,15 @@ function renderList(orders) {
           <strong>#${order.id}</strong>
           <span class="summary-date">${formatSavedAt(order.savedAt)}</span>
         </div>
-        <span class="summary-total">${formatMoney(total)}</span>
-        <span class="summary-chevron" aria-hidden="true">▼</span>
+        <div class="summary-end">
+          <span class="summary-total">${formatMoney(total)}</span>
+          <button type="button" class="btn-entry btn-print summary-print" data-action="print">Imprimer</button>
+          <span class="summary-chevron" aria-hidden="true">▼</span>
+        </div>
       </div>
       <div class="entry-details">
         <ul class="order-lines">${linesHtml}</ul>
-        <div class="entry-actions">
-          <button type="button" class="btn-entry btn-print" data-action="print">Imprimer</button>
-          <button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
-          <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>
-        </div>
+        ${canModify ? `<div class="entry-actions">${modifyActionsHtml}</div>` : ''}
       </div>
     `;
     listEl.appendChild(li);
@@ -1025,6 +1055,9 @@ async function submitOrder() {
     const savedOrder = body?.id ? body : null;
 
     resetForm();
+    if (!isEdit) {
+      showTodayAfterNewSale();
+    }
     await fetchData();
     setStatus('');
     showToast(
@@ -1082,6 +1115,13 @@ async function fetchData() {
 
     renderList(orders);
 
+    if (editingId != null) {
+      const editingOrder = orders.find((order) => order.id === editingId);
+      if (!editingOrder || !canModifyOrder(editingOrder)) {
+        resetForm();
+      }
+    }
+
     if (statsResponse.ok) {
       renderKpis(await statsResponse.json());
     }
@@ -1101,6 +1141,11 @@ async function fetchData() {
 }
 
 async function deleteOrder(id) {
+  const order = lastOrders.find((row) => row.id === id);
+  if (!order || !canModifyOrder(order)) {
+    return;
+  }
+
   const confirmed = await showConfirmDialog({
     title: `Supprimer la vente #${id} ?`,
     message:
@@ -1228,6 +1273,7 @@ listEl.addEventListener('click', (event) => {
   if (actionEl.disabled) return;
 
   if (actionEl.dataset.action === 'print') {
+    event.stopPropagation();
     const order = lastOrders.find((row) => row.id === id);
     if (order) {
       printSaleReceipt(order);
@@ -1237,14 +1283,17 @@ listEl.addEventListener('click', (event) => {
 
   if (actionEl.dataset.action === 'edit') {
     const order = lastOrders.find((row) => row.id === id);
-    if (order) {
+    if (order && canModifyOrder(order)) {
       startEdit(order);
     }
     return;
   }
 
   if (actionEl.dataset.action === 'delete') {
-    deleteOrder(id);
+    const order = lastOrders.find((row) => row.id === id);
+    if (order && canModifyOrder(order)) {
+      deleteOrder(id);
+    }
   }
 });
 

@@ -1134,11 +1134,24 @@
         color: var(--text-soft);
       }
 
+      .summary-end {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+      }
+
       .summary-total {
         font-weight: 700;
         font-size: 1.05rem;
         color: var(--success);
         white-space: nowrap;
+      }
+
+      .entry-summary .summary-print {
+        flex-shrink: 0;
+        padding: 6px 12px;
+        font-size: 0.8rem;
       }
 
       .summary-chevron {

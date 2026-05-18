@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "1.3.27",
+  "version": "1.3.28",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -33,6 +33,9 @@
       "backend-launcher.js",
       "updater.js",
       "preload.js",
+      "preload-auth.js",
+      "auth.html",
+      "auth.js",
       "package.json",
       "index.html",
       "renderer.js",

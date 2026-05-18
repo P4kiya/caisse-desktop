@@ -7,6 +7,8 @@ const { ensureBackendRunning } = require('./backend-launcher');
 const { printOrderReceipt } = require('./receipt-print');
 
 let mainWindow = null;
+let authWindow = null;
+let appUnlocked = false;
 
 function resolveAppIconPath() {
   const candidates = [
@@ -33,6 +35,44 @@ function injectAppVersionIntoPage() {
   })();`;
 
   mainWindow.webContents.executeJavaScript(script).catch(() => {});
+}
+
+function createAuthWindow() {
+  const iconPath = resolveAppIconPath();
+  authWindow = new BrowserWindow({
+    width: 400,
+    height: 580,
+    minWidth: 400,
+    maxWidth: 400,
+    minHeight: 580,
+    maxHeight: 580,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    backgroundColor: '#f5f4f1',
+    ...(iconPath ? { icon: iconPath } : {}),
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      preload: path.join(__dirname, 'preload-auth.js'),
+    },
+  });
+
+  authWindow.once('ready-to-show', () => {
+    authWindow.show();
+    authWindow.focus();
+  });
+
+  authWindow.loadFile(path.join(__dirname, 'auth.html'));
+
+  authWindow.on('closed', () => {
+    authWindow = null;
+    if (!appUnlocked) {
+      app.quit();
+    }
+  });
 }
 
 function createWindow() {
@@ -73,6 +113,24 @@ function createWindow() {
   });
 }
 
+ipcMain.handle('auth-unlock', async () => {
+  if (appUnlocked) {
+    return { ok: true };
+  }
+  appUnlocked = true;
+
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.close();
+    authWindow = null;
+  }
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+
+  return { ok: true };
+});
+
 ipcMain.handle('print-receipt', async (_event, payload) => {
   const { order, options = {} } = payload || {};
   const shopName = process.env.SHOP_NAME || 'Caisse';
@@ -111,11 +169,12 @@ app.whenReady().then(async () => {
     console.log('Premiere configuration du serveur terminee (base de donnees creee si besoin).');
   }
 
-  createWindow();
+  createAuthWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      appUnlocked = false;
+      createAuthWindow();
     }
   });
 });

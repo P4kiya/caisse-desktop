@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <script src="theme.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Caisse — Code d acces</title>
+    <link rel="icon" type="image/png" href="build/icon.png" />
+    <style>
+      :root,
+      [data-theme='light'] {
+        --bg: #f5f4f1;
+        --surface: #ffffff;
+        --surface-muted: #efeeeb;
+        --border: #e6e3dd;
+        --border-strong: #d5d1c9;
+        --text: #1c1b19;
+        --text-muted: #6f6c66;
+        --primary: #2f3f52;
+        --primary-soft: #eceff2;
+        --success: #3d6b52;
+        --error: #b54a4a;
+        --error-soft: #fdf5f5;
+        --focus-ring: rgba(47, 63, 82, 0.12);
+        --shadow-md: 0 4px 14px rgba(28, 27, 25, 0.06);
+      }
+
+      [data-theme='dark'] {
+        --bg: #121110;
+        --surface: #1c1b19;
+        --surface-muted: #262422;
+        --border: #35322e;
+        --border-strong: #45413c;
+        --text: #f3f1ed;
+        --text-muted: #a9a39a;
+        --primary: #9eb4cc;
+        --primary-soft: #2a3340;
+        --success: #6fb888;
+        --error: #e07d7d;
+        --error-soft: #322424;
+        --focus-ring: rgba(158, 180, 204, 0.22);
+        --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .auth-card {
+        width: 100%;
+        max-width: 320px;
+        padding: 28px 24px 22px;
+        border-radius: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md);
+      }
+
+      .auth-card.is-shake {
+        animation: auth-shake 0.45s ease;
+      }
+
+      @keyframes auth-shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        20%,
+        60% {
+          transform: translateX(-8px);
+        }
+        40%,
+        80% {
+          transform: translateX(8px);
+        }
+      }
+
+      .auth-logo {
+        display: block;
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        object-fit: contain;
+      }
+
+      .auth-title {
+        margin: 0 0 4px;
+        text-align: center;
+        font-size: 1.35rem;
+        font-weight: 600;
+      }
+
+      .auth-subtitle {
+        margin: 0 0 20px;
+        text-align: center;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+
+      .auth-dots {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+        margin-bottom: 10px;
+      }
+
+      .auth-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--border-strong);
+        background: transparent;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          transform 0.15s ease;
+      }
+
+      .auth-dot.is-filled {
+        border-color: var(--primary);
+        background: var(--primary);
+        transform: scale(1.08);
+      }
+
+      .auth-message {
+        min-height: 1.25rem;
+        margin: 0 0 16px;
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+      }
+
+      .auth-message.error {
+        color: var(--error);
+      }
+
+      .auth-message.success {
+        color: var(--success);
+      }
+
+      .numpad-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .numpad-btn {
+        min-height: 48px;
+        padding: 0;
+        border-radius: 10px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        font-size: 1.25rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          background 0.12s ease,
+          border-color 0.12s ease,
+          transform 0.1s ease;
+      }
+
+      .numpad-btn:hover:not(:disabled) {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+        color: var(--primary);
+      }
+
+      .numpad-btn:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+
+      .numpad-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .numpad-btn-wide {
+        grid-column: span 2;
+      }
+
+      .numpad-btn-action {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="auth-card" id="authCard">
+      <img src="build/icon.png" alt="" class="auth-logo" width="48" height="48" />
+      <h1 class="auth-title">Caisse</h1>
+      <p class="auth-subtitle">Entrez le code d acces</p>
+      <div class="auth-dots" id="authDots" aria-hidden="true"></div>
+      <p class="auth-message" id="authMessage" role="status" aria-live="polite"></p>
+      <div class="numpad-grid" id="authNumpad">
+        <button type="button" class="numpad-btn" data-key="1">1</button>
+        <button type="button" class="numpad-btn" data-key="2">2</button>
+        <button type="button" class="numpad-btn" data-key="3">3</button>
+        <button type="button" class="numpad-btn" data-key="4">4</button>
+        <button type="button" class="numpad-btn" data-key="5">5</button>
+        <button type="button" class="numpad-btn" data-key="6">6</button>
+        <button type="button" class="numpad-btn" data-key="7">7</button>
+        <button type="button" class="numpad-btn" data-key="8">8</button>
+        <button type="button" class="numpad-btn" data-key="9">9</button>
+        <button type="button" class="numpad-btn numpad-btn-action" data-key="clear">
+          Effacer
+        </button>
+        <button type="button" class="numpad-btn" data-key="0">0</button>
+        <button type="button" class="numpad-btn numpad-btn-action" data-key="backspace">
+          ⌫
+        </button>
+      </div>
+    </div>
+    <script src="auth.js"></script>
+  </body>
+</html>

@@ -697,6 +697,22 @@ function showTodayAfterNewSale() {
   viewMonthAnchor = todayKey;
 }
 
+function resetPeriodToCurrent() {
+  const todayKey = toDateKey(new Date());
+  if (currentPeriod === 'today') {
+    viewDateKey = todayKey;
+  } else if (currentPeriod === 'week') {
+    viewWeekAnchor = todayKey;
+  } else if (currentPeriod === 'month') {
+    viewMonthAnchor = todayKey;
+  }
+}
+
+function refreshData() {
+  resetPeriodToCurrent();
+  fetchData();
+}
+
 function clearLineEdit() {
   editingLineIndex = null;
   priceInput.value = '';
@@ -1322,7 +1338,7 @@ dayNextBtn?.addEventListener('click', () => shiftPeriodNav(1));
 addLineBtn.addEventListener('click', addLineToDraft);
 submitOrderBtn.addEventListener('click', submitOrder);
 cancelBtn.addEventListener('click', resetForm);
-fetchBtn.addEventListener('click', fetchData);
+fetchBtn.addEventListener('click', refreshData);
 themeToggle?.addEventListener('click', toggleTheme);
 
 window.caisseShowToast = showToast;

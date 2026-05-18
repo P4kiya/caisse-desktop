@@ -14,6 +14,13 @@ const PERIOD_LABELS = {
 let currentPeriod = 'today';
 let viewDateKey = toDateKey(new Date());
 let viewWeekAnchor = toDateKey(new Date());
+let viewMonthAnchor = toDateKey(new Date());
+
+const PERIOD_NAV_LABELS = {
+  today: { prev: 'Jour précédent', next: 'Jour suivant' },
+  week: { prev: 'Semaine précédente', next: 'Semaine suivante' },
+  month: { prev: 'Mois précédent', next: 'Mois suivant' },
+};
 let editingId = null;
 let expandedOrderId = null;
 let editingLineIndex = null;
@@ -441,6 +448,16 @@ function isCurrentWeekAnchor(key) {
   return startOfWeekMonday(key) === startOfWeekMonday(toDateKey(new Date()));
 }
 
+function toMonthAnchor(key) {
+  const date = parseDateKey(key);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-01`;
+}
+
+function isCurrentMonthAnchor(key) {
+  return toMonthAnchor(key) === toMonthAnchor(toDateKey(new Date()));
+}
+
 function formatDayLabel(key) {
   if (isTodayKey(key)) {
     return PERIOD_LABELS.today;
@@ -475,12 +492,52 @@ function formatWeekLabel(anchorKey) {
   return `Semaine du ${mondayLabel} au ${sundayLabel}`;
 }
 
+function formatMonthLabel(anchorKey) {
+  if (isCurrentMonthAnchor(anchorKey)) {
+    return PERIOD_LABELS.month;
+  }
+
+  return parseDateKey(toMonthAnchor(anchorKey)).toLocaleDateString(LOCALE, {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function getPeriodNavLabel() {
+  if (currentPeriod === 'today') {
+    return formatDayLabel(viewDateKey);
+  }
+  if (currentPeriod === 'week') {
+    return formatWeekLabel(viewWeekAnchor);
+  }
+  if (currentPeriod === 'month') {
+    return formatMonthLabel(viewMonthAnchor);
+  }
+  return '';
+}
+
+function isPeriodNavNextDisabled() {
+  if (currentPeriod === 'today') {
+    return isTodayKey(viewDateKey);
+  }
+  if (currentPeriod === 'week') {
+    return isCurrentWeekAnchor(viewWeekAnchor);
+  }
+  if (currentPeriod === 'month') {
+    return isCurrentMonthAnchor(viewMonthAnchor);
+  }
+  return true;
+}
+
 function getPeriodDisplayLabel() {
   if (currentPeriod === 'today') {
     return formatDayLabel(viewDateKey);
   }
   if (currentPeriod === 'week') {
     return formatWeekLabel(viewWeekAnchor);
+  }
+  if (currentPeriod === 'month') {
+    return formatMonthLabel(viewMonthAnchor);
   }
   return PERIOD_LABELS[currentPeriod] || currentPeriod;
 }
@@ -491,12 +548,17 @@ function periodQuery() {
     params.set('date', viewDateKey);
   } else if (currentPeriod === 'week') {
     params.set('date', viewWeekAnchor);
+  } else if (currentPeriod === 'month') {
+    params.set('date', toMonthAnchor(viewMonthAnchor));
   }
   return `?${params}`;
 }
 
 function updateDayNavUi() {
-  const showNav = currentPeriod === 'today' || currentPeriod === 'week';
+  const showNav =
+    currentPeriod === 'today' ||
+    currentPeriod === 'week' ||
+    currentPeriod === 'month';
   if (dayNav) {
     dayNav.hidden = !showNav;
   }
@@ -504,25 +566,19 @@ function updateDayNavUi() {
     return;
   }
 
-  const isWeek = currentPeriod === 'week';
-  const prevLabel = isWeek ? 'Semaine précédente' : 'Jour précédent';
-  const nextLabel = isWeek ? 'Semaine suivante' : 'Jour suivant';
+  const navLabels = PERIOD_NAV_LABELS[currentPeriod] || PERIOD_NAV_LABELS.today;
 
   if (dayPrevBtn) {
-    dayPrevBtn.title = prevLabel;
-    dayPrevBtn.setAttribute('aria-label', prevLabel);
+    dayPrevBtn.title = navLabels.prev;
+    dayPrevBtn.setAttribute('aria-label', navLabels.prev);
   }
   if (dayNextBtn) {
-    dayNextBtn.title = nextLabel;
-    dayNextBtn.setAttribute('aria-label', nextLabel);
-    dayNextBtn.disabled = isWeek
-      ? isCurrentWeekAnchor(viewWeekAnchor)
-      : isTodayKey(viewDateKey);
+    dayNextBtn.title = navLabels.next;
+    dayNextBtn.setAttribute('aria-label', navLabels.next);
+    dayNextBtn.disabled = isPeriodNavNextDisabled();
   }
   if (dayNavLabel) {
-    dayNavLabel.textContent = isWeek
-      ? formatWeekLabel(viewWeekAnchor)
-      : formatDayLabel(viewDateKey);
+    dayNavLabel.textContent = getPeriodNavLabel();
   }
 }
 
@@ -584,11 +640,37 @@ function shiftViewWeek(delta) {
   fetchData();
 }
 
+function shiftViewMonth(delta) {
+  if (currentPeriod !== 'month' || delta === 0) {
+    return;
+  }
+
+  if (delta > 0 && isCurrentMonthAnchor(viewMonthAnchor)) {
+    return;
+  }
+
+  const next = parseDateKey(toMonthAnchor(viewMonthAnchor));
+  next.setMonth(next.getMonth() + delta);
+  const nextKey = toDateKey(next);
+
+  if (
+    delta > 0 &&
+    toMonthAnchor(nextKey) > toMonthAnchor(toDateKey(new Date()))
+  ) {
+    return;
+  }
+
+  viewMonthAnchor = nextKey;
+  fetchData();
+}
+
 function shiftPeriodNav(delta) {
   if (currentPeriod === 'today') {
     shiftViewDay(delta);
   } else if (currentPeriod === 'week') {
     shiftViewWeek(delta);
+  } else if (currentPeriod === 'month') {
+    shiftViewMonth(delta);
   }
 }
 
@@ -1081,6 +1163,16 @@ function setPeriod(period) {
     }
     currentPeriod = 'week';
     viewWeekAnchor = toDateKey(new Date());
+    fetchData();
+    return;
+  }
+
+  if (period === 'month') {
+    if (currentPeriod === 'month' && isCurrentMonthAnchor(viewMonthAnchor)) {
+      return;
+    }
+    currentPeriod = 'month';
+    viewMonthAnchor = toDateKey(new Date());
     fetchData();
     return;
   }

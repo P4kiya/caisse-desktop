@@ -13,6 +13,7 @@ const PERIOD_LABELS = {
 
 let currentPeriod = 'today';
 let viewDateKey = toDateKey(new Date());
+let viewWeekAnchor = toDateKey(new Date());
 let editingId = null;
 let expandedOrderId = null;
 let editingLineIndex = null;
@@ -428,6 +429,18 @@ function isTodayKey(key) {
   return key === toDateKey(new Date());
 }
 
+function startOfWeekMonday(key) {
+  const date = parseDateKey(key);
+  const weekday = date.getDay();
+  const offset = weekday === 0 ? -6 : 1 - weekday;
+  date.setDate(date.getDate() + offset);
+  return toDateKey(date);
+}
+
+function isCurrentWeekAnchor(key) {
+  return startOfWeekMonday(key) === startOfWeekMonday(toDateKey(new Date()));
+}
+
 function formatDayLabel(key) {
   if (isTodayKey(key)) {
     return PERIOD_LABELS.today;
@@ -440,9 +453,34 @@ function formatDayLabel(key) {
   });
 }
 
+function formatWeekLabel(anchorKey) {
+  if (isCurrentWeekAnchor(anchorKey)) {
+    return PERIOD_LABELS.week;
+  }
+
+  const monday = parseDateKey(startOfWeekMonday(anchorKey));
+  const sunday = new Date(monday);
+  sunday.setDate(sunday.getDate() + 6);
+
+  const mondayLabel = monday.toLocaleDateString(LOCALE, {
+    day: 'numeric',
+    month: 'long',
+  });
+  const sundayLabel = sunday.toLocaleDateString(LOCALE, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return `Semaine du ${mondayLabel} au ${sundayLabel}`;
+}
+
 function getPeriodDisplayLabel() {
   if (currentPeriod === 'today') {
     return formatDayLabel(viewDateKey);
+  }
+  if (currentPeriod === 'week') {
+    return formatWeekLabel(viewWeekAnchor);
   }
   return PERIOD_LABELS[currentPeriod] || currentPeriod;
 }
@@ -451,24 +489,40 @@ function periodQuery() {
   const params = new URLSearchParams({ period: currentPeriod });
   if (currentPeriod === 'today') {
     params.set('date', viewDateKey);
+  } else if (currentPeriod === 'week') {
+    params.set('date', viewWeekAnchor);
   }
   return `?${params}`;
 }
 
 function updateDayNavUi() {
-  const showDayNav = currentPeriod === 'today';
+  const showNav = currentPeriod === 'today' || currentPeriod === 'week';
   if (dayNav) {
-    dayNav.hidden = !showDayNav;
+    dayNav.hidden = !showNav;
   }
-  if (!showDayNav) {
+  if (!showNav) {
     return;
   }
 
-  if (dayNavLabel) {
-    dayNavLabel.textContent = formatDayLabel(viewDateKey);
+  const isWeek = currentPeriod === 'week';
+  const prevLabel = isWeek ? 'Semaine précédente' : 'Jour précédent';
+  const nextLabel = isWeek ? 'Semaine suivante' : 'Jour suivant';
+
+  if (dayPrevBtn) {
+    dayPrevBtn.title = prevLabel;
+    dayPrevBtn.setAttribute('aria-label', prevLabel);
   }
   if (dayNextBtn) {
-    dayNextBtn.disabled = isTodayKey(viewDateKey);
+    dayNextBtn.title = nextLabel;
+    dayNextBtn.setAttribute('aria-label', nextLabel);
+    dayNextBtn.disabled = isWeek
+      ? isCurrentWeekAnchor(viewWeekAnchor)
+      : isTodayKey(viewDateKey);
+  }
+  if (dayNavLabel) {
+    dayNavLabel.textContent = isWeek
+      ? formatWeekLabel(viewWeekAnchor)
+      : formatDayLabel(viewDateKey);
   }
 }
 
@@ -504,6 +558,38 @@ function shiftViewDay(delta) {
 
   viewDateKey = nextKey;
   fetchData();
+}
+
+function shiftViewWeek(delta) {
+  if (currentPeriod !== 'week' || delta === 0) {
+    return;
+  }
+
+  if (delta > 0 && isCurrentWeekAnchor(viewWeekAnchor)) {
+    return;
+  }
+
+  const next = parseDateKey(viewWeekAnchor);
+  next.setDate(next.getDate() + delta * 7);
+  const nextKey = toDateKey(next);
+
+  if (
+    delta > 0 &&
+    startOfWeekMonday(nextKey) > startOfWeekMonday(toDateKey(new Date()))
+  ) {
+    return;
+  }
+
+  viewWeekAnchor = nextKey;
+  fetchData();
+}
+
+function shiftPeriodNav(delta) {
+  if (currentPeriod === 'today') {
+    shiftViewDay(delta);
+  } else if (currentPeriod === 'week') {
+    shiftViewWeek(delta);
+  }
 }
 
 function clearLineEdit() {
@@ -989,6 +1075,16 @@ function setPeriod(period) {
     return;
   }
 
+  if (period === 'week') {
+    if (currentPeriod === 'week' && isCurrentWeekAnchor(viewWeekAnchor)) {
+      return;
+    }
+    currentPeriod = 'week';
+    viewWeekAnchor = toDateKey(new Date());
+    fetchData();
+    return;
+  }
+
   if (period === currentPeriod) {
     return;
   }
@@ -1079,8 +1175,8 @@ filterButtons.forEach((btn) => {
   btn.addEventListener('click', () => setPeriod(btn.dataset.period));
 });
 
-dayPrevBtn?.addEventListener('click', () => shiftViewDay(-1));
-dayNextBtn?.addEventListener('click', () => shiftViewDay(1));
+dayPrevBtn?.addEventListener('click', () => shiftPeriodNav(-1));
+dayNextBtn?.addEventListener('click', () => shiftPeriodNav(1));
 
 addLineBtn.addEventListener('click', addLineToDraft);
 submitOrderBtn.addEventListener('click', submitOrder);

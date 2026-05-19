@@ -1272,10 +1272,43 @@
       .day-nav {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         gap: 12px;
         margin-bottom: 12px;
         flex-shrink: 0;
+      }
+
+      .day-nav-controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex: 1;
+        min-width: 0;
+      }
+
+      .day-nav-print-btn {
+        flex-shrink: 0;
+        padding: 8px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--primary);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .day-nav-print-btn:hover:not(:disabled) {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+      }
+
+      .day-nav-print-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
       }
 
       .day-nav[hidden] {
@@ -1565,25 +1598,36 @@
         </div>
 
         <div class="day-nav" id="dayNav" aria-label="Navigation temporelle" hidden>
+          <div class="day-nav-controls">
+            <button
+              type="button"
+              class="day-nav-btn"
+              id="dayPrevBtn"
+              title="Jour précédent"
+              aria-label="Jour précédent"
+            >
+              ←
+            </button>
+            <span class="day-nav-label" id="dayNavLabel">Aujourd'hui</span>
+            <button
+              type="button"
+              class="day-nav-btn"
+              id="dayNextBtn"
+              title="Jour suivant"
+              aria-label="Jour suivant"
+              disabled
+            >
+              →
+            </button>
+          </div>
           <button
             type="button"
-            class="day-nav-btn"
-            id="dayPrevBtn"
-            title="Jour précédent"
-            aria-label="Jour précédent"
+            class="day-nav-print-btn"
+            id="printAllDayBtn"
+            title="Imprimer le recap du jour (totaux uniquement)"
+            hidden
           >
-            ←
-          </button>
-          <span class="day-nav-label" id="dayNavLabel">Aujourd'hui</span>
-          <button
-            type="button"
-            class="day-nav-btn"
-            id="dayNextBtn"
-            title="Jour suivant"
-            aria-label="Jour suivant"
-            disabled
-          >
-            →
+            Imprimer tout
           </button>
         </div>
 

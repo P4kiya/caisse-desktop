@@ -53,22 +53,107 @@ function isVirtualPrinterName(name) {
   );
 }
 
+/** SEYPOS / Sewoo PRP-320 and similar 80 mm ticket printers */
+const THERMAL_PRINTER_PATTERNS = ['prp-320', 'prp320', 'seypos', 'sewoo'];
+
+function printerNameMatchesPatterns(name, patterns) {
+  const normalized = String(name || '').toLowerCase();
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
+function isThermalReceiptPrinter(name) {
+  return printerNameMatchesPatterns(name, THERMAL_PRINTER_PATTERNS);
+}
+
+function getPhysicalPrinters(printers) {
+  return (printers || []).filter((p) => !isVirtualPrinterName(p.name));
+}
+
+function findPrinterByQuery(printers, query) {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) {
+    return null;
+  }
+
+  const physical = getPhysicalPrinters(printers);
+  const exact = physical.find((p) => p.name.toLowerCase() === needle);
+  if (exact) {
+    return exact.name;
+  }
+
+  const partial = physical.find((p) => p.name.toLowerCase().includes(needle));
+  if (partial) {
+    return partial.name;
+  }
+
+  return physical.find((p) => needle.includes(p.name.toLowerCase()))?.name || null;
+}
+
+function findAutoReceiptPrinter(printers) {
+  const physical = getPhysicalPrinters(printers);
+  const match = physical.find((p) => isThermalReceiptPrinter(p.name));
+  return match ? match.name : null;
+}
+
+function ticketLayoutCss(thermal) {
+  if (thermal) {
+    return `
+    @page { size: 80mm auto; margin: 2mm; }
+    body { font-size: 10pt; }
+    .shop { font-size: 13pt !important; }
+    .total-row { font-size: 12pt !important; }
+    `;
+  }
+  return `
+    @page { size: A5 portrait; margin: 10mm 12mm; }
+  `;
+}
+
+function getElectronPrintOptions(deviceName) {
+  if (isThermalReceiptPrinter(deviceName)) {
+    return {
+      pageSize: { width: 80000, height: 297000 },
+      margins: {
+        marginType: 'custom',
+        top: 0.08,
+        bottom: 0.08,
+        left: 0.08,
+        right: 0.08,
+      },
+    };
+  }
+  return {
+    pageSize: 'A5',
+    margins: {
+      marginType: 'custom',
+      top: 0.4,
+      bottom: 0.4,
+      left: 0.45,
+      right: 0.45,
+    },
+  };
+}
+
 async function resolvePhysicalPrinter(webContents, preferredName) {
   const printers = await webContents.getPrintersAsync();
   if (!Array.isArray(printers) || printers.length === 0) {
     throw new Error('Aucune imprimante detectee sur ce PC.');
   }
 
+  const fromQuery = findPrinterByQuery(printers, preferredName);
+  if (fromQuery) {
+    return fromQuery;
+  }
+
   if (preferredName) {
-    const preferred = printers.find((p) => p.name === preferredName);
-    if (preferred) {
-      if (isVirtualPrinterName(preferred.name)) {
-        throw new Error(
-          `L'imprimante « ${preferred.name} » est une imprimante PDF virtuelle. Utilisez une imprimante physique.`,
-        );
-      }
-      return preferred.name;
-    }
+    throw new Error(
+      `Imprimante « ${preferredName} » introuvable. Verifiez le nom dans Parametres Windows > Imprimantes ou dans PRINT_PRINTER (.env).`,
+    );
+  }
+
+  const receiptPrinter = findAutoReceiptPrinter(printers);
+  if (receiptPrinter) {
+    return receiptPrinter;
   }
 
   const defaultPrinter = printers.find((p) => p.isDefault);
@@ -76,13 +161,13 @@ async function resolvePhysicalPrinter(webContents, preferredName) {
     return defaultPrinter.name;
   }
 
-  const physical = printers.find((p) => !isVirtualPrinterName(p.name));
+  const physical = getPhysicalPrinters(printers)[0];
   if (physical) {
     return physical.name;
   }
 
   throw new Error(
-    'Imprimante physique introuvable. Dans Windows : Parametres > Bluetooth et appareils > Imprimantes, definissez votre imprimante ticket (pas « Microsoft Print to PDF ») comme imprimante par defaut. Vous pouvez aussi ajouter PRINT_PRINTER=nom exact dans caisse-desktop\\.env',
+    'Imprimante ticket introuvable. Installez le pilote SEYPOS PRP-320 (80 mm), connectez l imprimante, puis definissez PRINT_PRINTER=PRP-320 dans caisse-desktop\\.env',
   );
 }
 
@@ -108,10 +193,7 @@ function buildReceiptHtml(order, options = {}) {
   <meta charset="UTF-8" />
   <title>Ticket #${escapeHtml(order.id)}</title>
   <style>
-    @page {
-      size: A5 portrait;
-      margin: 10mm 12mm;
-    }
+    ${ticketLayoutCss(options.thermal)}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -218,16 +300,99 @@ function buildReceiptHtml(order, options = {}) {
 </html>`;
 }
 
-function printOrderReceipt(order, options = {}) {
-  if (!order || !order.id) {
-    return Promise.reject(new Error('Vente invalide pour impression'));
-  }
+function buildDaySummaryReceiptHtml(orders, options = {}) {
+  const shopName = options.shopName || 'Caisse';
+  const periodLabel = options.periodLabel || "Aujourd'hui";
+  const list = Array.isArray(orders) ? orders : [];
+  const grandTotal = list.reduce((sum, order) => sum + orderTotal(order), 0);
 
+  const rowsHtml = list
+    .map((order) => {
+      const total = orderTotal(order);
+      return `
+        <tr>
+          <td class="col-id">#${escapeHtml(order.id)}</td>
+          <td class="col-total">${formatMoney(total)}</td>
+        </tr>`;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Recap ${escapeHtml(periodLabel)}</title>
+  <style>
+    ${ticketLayoutCss(options.thermal)}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 11pt;
+      color: #111;
+      line-height: 1.35;
+    }
+    .ticket { max-width: 100%; }
+    .shop { font-size: 14pt; font-weight: 700; text-align: center; }
+    .subtitle { text-align: center; font-size: 10pt; color: #444; margin: 4px 0 14px; }
+    .period { text-align: center; font-weight: 600; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 6px 4px; border-bottom: 1px solid #ddd; }
+    th { font-size: 9pt; text-transform: uppercase; color: #555; text-align: left; }
+    .col-total { text-align: right; font-weight: 600; white-space: nowrap; }
+    .summary-footer {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 2px solid #111;
+    }
+    .summary-footer div {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .summary-footer .grand {
+      font-size: 13pt;
+      font-weight: 700;
+    }
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 9.5pt;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket">
+    <p class="shop">${escapeHtml(shopName)}</p>
+    <p class="subtitle">Recapitulatif des ventes</p>
+    <p class="period">${escapeHtml(periodLabel)}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Vente</th>
+          <th class="col-total">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="2">Aucune vente</td></tr>'}
+      </tbody>
+    </table>
+    <div class="summary-footer">
+      <div><span>Nombre de ventes</span><strong>${list.length}</strong></div>
+      <div class="grand"><span>TOTAL</span><span>${formatMoney(grandTotal)}</span></div>
+    </div>
+    <p class="footer">Totaux uniquement — sans detail articles</p>
+  </div>
+</body>
+</html>`;
+}
+
+function printHtmlDocument(buildHtml, options = {}) {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
       show: false,
-      width: 420,
-      height: 595,
+      width: 320,
+      height: 800,
       webPreferences: {
         sandbox: true,
         nodeIntegration: false,
@@ -235,65 +400,105 @@ function printOrderReceipt(order, options = {}) {
       },
     });
 
-    const html = buildReceiptHtml(order, options);
-    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-
     const cleanup = () => {
       if (!win.isDestroyed()) win.destroy();
     };
 
-    win.webContents.once('did-finish-load', () => {
-      setTimeout(async () => {
-        try {
-          const deviceName = await resolvePhysicalPrinter(
-            win.webContents,
-            options.deviceName,
-          );
+    const fail = (err) => {
+      cleanup();
+      reject(err);
+    };
 
+    win.webContents.on('did-fail-load', (_event, code, description) => {
+      fail(new Error(description || `Chargement ticket (${code})`));
+    });
+
+    let printStage = 'init';
+    let resolvedDeviceName = '';
+
+    win.webContents.on('did-finish-load', () => {
+      if (printStage === 'init') {
+        printStage = 'loading';
+        setTimeout(async () => {
+          try {
+            resolvedDeviceName = await resolvePhysicalPrinter(
+              win.webContents,
+              options.deviceName,
+            );
+            const forceThermal = process.env.PRINT_THERMAL !== '0';
+            const thermal =
+              options.thermal === true ||
+              (options.thermal !== false &&
+                forceThermal &&
+                isThermalReceiptPrinter(resolvedDeviceName));
+
+            const html = buildHtml({ ...options, thermal });
+            const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+            await win.loadURL(dataUrl);
+          } catch (err) {
+            fail(err);
+          }
+        }, 150);
+        return;
+      }
+
+      if (printStage === 'loading') {
+        printStage = 'printing';
+        setTimeout(() => {
+          const deviceName = resolvedDeviceName;
+          const layout = getElectronPrintOptions(deviceName);
           const printOptions = {
             silent: true,
             deviceName,
             printBackground: true,
-            pageSize: 'A5',
-            margins: {
-              marginType: 'custom',
-              top: 0.4,
-              bottom: 0.4,
-              left: 0.45,
-              right: 0.45,
-            },
+            ...layout,
           };
 
           win.webContents.print(printOptions, (success, failureReason) => {
             cleanup();
             if (success) {
-              resolve({ ok: true, deviceName });
+              resolve({
+                ok: true,
+                deviceName,
+                thermal: isThermalReceiptPrinter(deviceName),
+              });
             } else {
               reject(new Error(failureReason || 'Impression annulee'));
             }
           });
-        } catch (err) {
-          cleanup();
-          reject(err);
-        }
-      }, 200);
+        }, 200);
+      }
     });
 
-    win.webContents.once('did-fail-load', (_event, code, description) => {
-      cleanup();
-      reject(new Error(description || `Chargement ticket (${code})`));
-    });
-
-    win.loadURL(dataUrl).catch((err) => {
-      cleanup();
-      reject(err);
-    });
+    win.loadURL('about:blank').catch(fail);
   });
+}
+
+function printOrderReceipt(order, options = {}) {
+  if (!order || !order.id) {
+    return Promise.reject(new Error('Vente invalide pour impression'));
+  }
+  return printHtmlDocument((opts) => buildReceiptHtml(order, opts), options);
+}
+
+function printDaySummaryReceipt(orders, options = {}) {
+  const list = Array.isArray(orders) ? orders : [];
+  if (!list.length) {
+    return Promise.reject(new Error('Aucune vente a imprimer.'));
+  }
+  return printHtmlDocument(
+    (opts) => buildDaySummaryReceiptHtml(list, opts),
+    options,
+  );
 }
 
 module.exports = {
   printOrderReceipt,
+  printDaySummaryReceipt,
   buildReceiptHtml,
+  buildDaySummaryReceiptHtml,
   resolvePhysicalPrinter,
   isVirtualPrinterName,
+  isThermalReceiptPrinter,
+  THERMAL_PRINTER_PATTERNS,
 };

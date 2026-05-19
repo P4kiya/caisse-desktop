@@ -4,7 +4,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { setupUpdaterIpc, attachMainWindow } = require('./updater');
 const { ensureBackendRunning } = require('./backend-launcher');
-const { printOrderReceipt } = require('./receipt-print');
+const { printOrderReceipt, printDaySummaryReceipt } = require('./receipt-print');
 
 let mainWindow = null;
 let appUnlocked = false;
@@ -153,6 +153,17 @@ ipcMain.handle('print-receipt', async (_event, payload) => {
     (process.env.PRINT_PRINTER || '').trim() ||
     undefined;
   await printOrderReceipt(order, { shopName, deviceName, ...options });
+  return { ok: true };
+});
+
+ipcMain.handle('print-day-summary', async (_event, payload) => {
+  const { orders, options = {} } = payload || {};
+  const shopName = process.env.SHOP_NAME || 'Caisse';
+  const deviceName =
+    options.deviceName ||
+    (process.env.PRINT_PRINTER || '').trim() ||
+    undefined;
+  await printDaySummaryReceipt(orders, { shopName, deviceName, ...options });
   return { ok: true };
 });
 

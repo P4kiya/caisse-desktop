@@ -21,7 +21,6 @@ const PERIOD_NAV_LABELS = {
   week: { prev: 'Semaine précédente', next: 'Semaine suivante' },
   month: { prev: 'Mois précédent', next: 'Mois suivant' },
 };
-let editingId = null;
 let expandedOrderId = null;
 let editingLineIndex = null;
 let draftLines = [];
@@ -46,6 +45,7 @@ const dayNav = document.getElementById('dayNav');
 const dayPrevBtn = document.getElementById('dayPrevBtn');
 const dayNextBtn = document.getElementById('dayNextBtn');
 const dayNavLabel = document.getElementById('dayNavLabel');
+const printAllDayBtn = document.getElementById('printAllDayBtn');
 
 const kpiAmount = document.getElementById('kpiAmount');
 const kpiEntries = document.getElementById('kpiEntries');
@@ -216,6 +216,10 @@ function setBusy(busy) {
   submitOrderBtn.disabled = busy || draftLines.length === 0;
   cancelBtn.disabled = busy;
   fetchBtn.disabled = busy;
+  if (printAllDayBtn) {
+    printAllDayBtn.disabled =
+      busy || (currentPeriod === 'today' && lastOrders.length === 0);
+  }
   filterButtons.forEach((btn) => {
     btn.disabled = busy;
   });
@@ -436,21 +440,6 @@ function isTodayKey(key) {
   return key === toDateKey(new Date());
 }
 
-function isOrderFromToday(savedAt) {
-  if (!savedAt) {
-    return false;
-  }
-  const date = new Date(savedAt);
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
-  return toDateKey(date) === toDateKey(new Date());
-}
-
-function canModifyOrder(order) {
-  return isOrderFromToday(order?.savedAt);
-}
-
 function startOfWeekMonday(key) {
   const date = parseDateKey(key);
   const weekday = date.getDay();
@@ -594,6 +583,11 @@ function updateDayNavUi() {
   }
   if (dayNavLabel) {
     dayNavLabel.textContent = getPeriodNavLabel();
+  }
+  if (printAllDayBtn) {
+    const showPrintAll = currentPeriod === 'today';
+    printAllDayBtn.hidden = !showPrintAll;
+    printAllDayBtn.disabled = showPrintAll && lastOrders.length === 0;
   }
 }
 
@@ -764,25 +758,15 @@ function renderDraft() {
 }
 
 function updateFormMode() {
-  if (editingId) {
-    formTitle.textContent = `Modifier la commande #${editingId}`;
-    submitOrderBtn.textContent = 'Enregistrer les modifications';
-    cancelBtn.hidden = false;
-  } else {
-    formTitle.textContent = 'Nouvelle vente';
-    submitOrderBtn.textContent = 'Enregistrer la vente';
+  formTitle.textContent = 'Nouvelle vente';
+  submitOrderBtn.textContent = 'Enregistrer la vente';
+  if (cancelBtn) {
     cancelBtn.hidden = true;
   }
-
-  listEl.querySelectorAll('li[data-id]').forEach((li) => {
-    li.classList.toggle('is-editing', Number(li.dataset.id) === editingId);
-  });
-
   renderDraft();
 }
 
 function resetForm() {
-  editingId = null;
   expandedOrderId = null;
   editingLineIndex = null;
   draftLines = [];
@@ -866,30 +850,48 @@ function toggleOrderDetails(id) {
   });
 }
 
-function startEdit(order) {
-  if (!canModifyOrder(order)) {
-    return;
-  }
-  editingId = order.id;
-  expandedOrderId = order.id;
-  draftLines = order.items.map((item) => ({
-    price: Number(item.price),
-    quantity: Number(item.quantity),
-  }));
-  editingLineIndex = null;
-  priceInput.value = '';
-  quantityInput.value = '';
-  quantityReplaceOnNextInput = false;
-  updateAddLineButton();
-  updateFormMode();
-  setStatus('');
-}
-
 function formatSavedAt(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString(LOCALE);
+}
+
+async function printAllDaySales() {
+  if (currentPeriod !== 'today') {
+    return;
+  }
+  if (!lastOrders.length) {
+    showToast({
+      title: 'Aucune vente',
+      message: 'Aucune vente a imprimer pour cette journee.',
+      type: 'error',
+    });
+    return;
+  }
+  if (!window.caissePrint?.printDaySummary) {
+    setStatus('Impression non disponible.', 'error');
+    return;
+  }
+
+  setBusy(true);
+  setStatus('Impression du recap…');
+
+  try {
+    await window.caissePrint.printDaySummary(lastOrders, {
+      periodLabel: getPeriodDisplayLabel(),
+      deviceName: window.caissePrint.deviceName || undefined,
+    });
+    setStatus('');
+    showToast({
+      title: 'Impression',
+      message: `Recap de ${lastOrders.length} vente(s) envoye a l'imprimante.`,
+    });
+  } catch (err) {
+    setStatus(`Impression : ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function printSaleReceipt(order, { quiet = false } = {}) {
@@ -940,15 +942,13 @@ function renderList(orders) {
     empty.className = 'empty';
     empty.textContent = `Aucune commande pour ${PERIOD_LABELS[currentPeriod].toLowerCase()}.`;
     listEl.appendChild(empty);
+    updateDayNavUi();
     return;
   }
 
   for (const order of orders) {
     const li = document.createElement('li');
     li.dataset.id = String(order.id);
-    if (editingId === order.id) {
-      li.classList.add('is-editing');
-    }
     if (expandedOrderId === order.id) {
       li.classList.add('is-expanded');
     }
@@ -969,11 +969,6 @@ function renderList(orders) {
           );
 
     const isExpanded = expandedOrderId === order.id;
-    const canModify = canModifyOrder(order);
-    const modifyActionsHtml = canModify
-      ? `<button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
-          <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>`
-      : '';
 
     li.innerHTML = `
       <div class="entry-summary" data-action="toggle" role="button" tabindex="0" aria-expanded="${isExpanded}">
@@ -989,11 +984,12 @@ function renderList(orders) {
       </div>
       <div class="entry-details">
         <ul class="order-lines">${linesHtml}</ul>
-        ${canModify ? `<div class="entry-actions">${modifyActionsHtml}</div>` : ''}
       </div>
     `;
     listEl.appendChild(li);
   }
+
+  updateDayNavUi();
 }
 
 function addLineToDraft() {
@@ -1043,14 +1039,12 @@ async function submitOrder() {
     return;
   }
 
-  const isEdit = editingId != null;
   setBusy(true);
-  setStatus(isEdit ? 'Modification…' : 'Enregistrement…');
+  setStatus('Enregistrement…');
 
   try {
-    const url = isEdit ? `${DATA_URL}/${editingId}` : DATA_URL;
-    const response = await fetch(url, {
-      method: isEdit ? 'PUT' : 'POST',
+    const response = await fetch(DATA_URL, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         items: draftLines.map((line) => ({
@@ -1071,33 +1065,19 @@ async function submitOrder() {
     const savedOrder = body?.id ? body : null;
 
     resetForm();
-    if (!isEdit) {
-      showTodayAfterNewSale();
-    }
+    showTodayAfterNewSale();
     await fetchData();
     setStatus('');
-    showToast(
-      isEdit
-        ? {
-            title: 'Vente modifiée',
-            message: 'Les modifications ont été enregistrées.',
-          }
-        : {
-            title: 'Vente enregistrée',
-            message: 'La vente a été ajoutée avec succès.',
-          },
-    );
+    showToast({
+      title: 'Vente enregistrée',
+      message: 'La vente a été ajoutée avec succès.',
+    });
 
-    if (!isEdit && savedOrder && window.caissePrint?.autoPrint) {
+    if (savedOrder && window.caissePrint?.autoPrint) {
       await printSaleReceipt(savedOrder, { quiet: true });
     }
   } catch (err) {
-    setStatus(
-      isEdit
-        ? `Échec de la modification : ${err.message}`
-        : `Échec de l'enregistrement : ${err.message}`,
-      'error',
-    );
+    setStatus(`Échec de l'enregistrement : ${err.message}`, 'error');
   } finally {
     setBusy(false);
   }
@@ -1131,13 +1111,6 @@ async function fetchData() {
 
     renderList(orders);
 
-    if (editingId != null) {
-      const editingOrder = orders.find((order) => order.id === editingId);
-      if (!editingOrder || !canModifyOrder(editingOrder)) {
-        resetForm();
-      }
-    }
-
     if (statsResponse.ok) {
       renderKpis(await statsResponse.json());
     }
@@ -1151,53 +1124,6 @@ async function fetchData() {
     empty.textContent = `Impossible de charger les données. L'API est-elle démarrée sur ${API_BASE_URL} ?`;
     listEl.appendChild(empty);
     setStatus(`Échec du chargement : ${err.message}`, 'error');
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function deleteOrder(id) {
-  const order = lastOrders.find((row) => row.id === id);
-  if (!order || !canModifyOrder(order)) {
-    return;
-  }
-
-  const confirmed = await showConfirmDialog({
-    title: `Supprimer la vente #${id} ?`,
-    message:
-      'Cette action est irréversible. Tous les articles de cette vente seront définitivement supprimés.',
-  });
-  if (!confirmed) return;
-
-  setBusy(true);
-  setStatus('Suppression…');
-
-  try {
-    const response = await fetch(`${DATA_URL}/${id}`, { method: 'DELETE' });
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(
-        body.error || `Le serveur a répondu avec le code ${response.status}`,
-      );
-    }
-
-    if (editingId === id || expandedOrderId === id) {
-      if (editingId === id) {
-        resetForm();
-      } else {
-        expandedOrderId = null;
-      }
-    }
-
-    await fetchData();
-    setStatus('');
-    showToast({
-      title: 'Vente supprimée',
-      message: 'La vente a été retirée définitivement.',
-    });
-  } catch (err) {
-    setStatus(`Échec de la suppression : ${err.message}`, 'error');
   } finally {
     setBusy(false);
   }
@@ -1297,20 +1223,6 @@ listEl.addEventListener('click', (event) => {
     return;
   }
 
-  if (actionEl.dataset.action === 'edit') {
-    const order = lastOrders.find((row) => row.id === id);
-    if (order && canModifyOrder(order)) {
-      startEdit(order);
-    }
-    return;
-  }
-
-  if (actionEl.dataset.action === 'delete') {
-    const order = lastOrders.find((row) => row.id === id);
-    if (order && canModifyOrder(order)) {
-      deleteOrder(id);
-    }
-  }
 });
 
 listEl.addEventListener('keydown', (event) => {
@@ -1334,6 +1246,7 @@ filterButtons.forEach((btn) => {
 
 dayPrevBtn?.addEventListener('click', () => shiftPeriodNav(-1));
 dayNextBtn?.addEventListener('click', () => shiftPeriodNav(1));
+printAllDayBtn?.addEventListener('click', printAllDaySales);
 
 addLineBtn.addEventListener('click', addLineToDraft);
 submitOrderBtn.addEventListener('click', submitOrder);

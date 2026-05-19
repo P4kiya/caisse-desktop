@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('caisseAuth', {
-  unlock: () => ipcRenderer.invoke('auth-unlock'),
+  unlock: (payload) => ipcRenderer.invoke('auth-unlock', payload || {}),
+  getRole: () => ipcRenderer.invoke('auth-get-role'),
 });

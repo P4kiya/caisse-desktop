@@ -48,7 +48,8 @@ UPDATE_CHANNELS.forEach((channel) => {
 });
 
 contextBridge.exposeInMainWorld('caisseAuth', {
-  unlock: () => ipcRenderer.invoke('auth-unlock'),
+  unlock: (payload) => ipcRenderer.invoke('auth-unlock', payload || {}),
+  getRole: () => ipcRenderer.invoke('auth-get-role'),
 });
 
 contextBridge.exposeInMainWorld('caisseConfig', {

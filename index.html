@@ -154,6 +154,25 @@
         display: none;
       }
 
+      .auth-role-badge {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 8px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #fff;
+        background: #8b5a2b;
+        vertical-align: middle;
+      }
+
+      .auth-role-badge[hidden] {
+        display: none !important;
+      }
+
       .theme-toggle {
         flex-shrink: 0;
         width: 40px;
@@ -1478,7 +1497,7 @@
       <div class="app-header-inner">
         <div class="app-brand">
           <img src="build/icon.png" alt="" class="app-logo" width="36" height="36" />
-          <h1>Caisse <span class="app-version" id="appVersion" aria-label="Version"></span></h1>
+          <h1>Caisse <span class="app-version" id="appVersion" aria-label="Version"></span><span id="authRoleBadge" class="auth-role-badge" hidden>Admin</span></h1>
         </div>
         <div class="header-actions">
           <button

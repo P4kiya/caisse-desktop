@@ -21,6 +21,8 @@ const PERIOD_NAV_LABELS = {
   week: { prev: 'Semaine précédente', next: 'Semaine suivante' },
   month: { prev: 'Mois précédent', next: 'Mois suivant' },
 };
+let authRole = 'user';
+let editingId = null;
 let expandedOrderId = null;
 let editingLineIndex = null;
 let draftLines = [];
@@ -440,6 +442,14 @@ function isTodayKey(key) {
   return key === toDateKey(new Date());
 }
 
+function isAdminUser() {
+  return authRole === 'admin';
+}
+
+function canModifyOrder() {
+  return isAdminUser();
+}
+
 function startOfWeekMonday(key) {
   const date = parseDateKey(key);
   const weekday = date.getDay();
@@ -758,15 +768,29 @@ function renderDraft() {
 }
 
 function updateFormMode() {
-  formTitle.textContent = 'Nouvelle vente';
-  submitOrderBtn.textContent = 'Enregistrer la vente';
-  if (cancelBtn) {
-    cancelBtn.hidden = true;
+  if (editingId) {
+    formTitle.textContent = `Modifier la commande #${editingId}`;
+    submitOrderBtn.textContent = 'Enregistrer les modifications';
+    if (cancelBtn) {
+      cancelBtn.hidden = false;
+    }
+  } else {
+    formTitle.textContent = 'Nouvelle vente';
+    submitOrderBtn.textContent = 'Enregistrer la vente';
+    if (cancelBtn) {
+      cancelBtn.hidden = true;
+    }
   }
+
+  listEl.querySelectorAll('li[data-id]').forEach((li) => {
+    li.classList.toggle('is-editing', Number(li.dataset.id) === editingId);
+  });
+
   renderDraft();
 }
 
 function resetForm() {
+  editingId = null;
   expandedOrderId = null;
   editingLineIndex = null;
   draftLines = [];
@@ -848,6 +872,25 @@ function toggleOrderDetails(id) {
   listEl.querySelectorAll('li[data-id]').forEach((li) => {
     li.classList.toggle('is-expanded', Number(li.dataset.id) === expandedOrderId);
   });
+}
+
+function startEdit(order) {
+  if (!canModifyOrder()) {
+    return;
+  }
+  editingId = order.id;
+  expandedOrderId = order.id;
+  draftLines = (order.items || []).map((item) => ({
+    price: Number(item.price),
+    quantity: Number(item.quantity),
+  }));
+  editingLineIndex = null;
+  priceInput.value = '';
+  quantityInput.value = '';
+  quantityReplaceOnNextInput = false;
+  updateAddLineButton();
+  updateFormMode();
+  setStatus('');
 }
 
 function formatSavedAt(value) {
@@ -949,6 +992,9 @@ function renderList(orders) {
   for (const order of orders) {
     const li = document.createElement('li');
     li.dataset.id = String(order.id);
+    if (editingId === order.id) {
+      li.classList.add('is-editing');
+    }
     if (expandedOrderId === order.id) {
       li.classList.add('is-expanded');
     }
@@ -969,6 +1015,11 @@ function renderList(orders) {
           );
 
     const isExpanded = expandedOrderId === order.id;
+    const canModify = canModifyOrder();
+    const modifyActionsHtml = canModify
+      ? `<button type="button" class="btn-entry btn-edit" data-action="edit">Modifier</button>
+          <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>`
+      : '';
 
     li.innerHTML = `
       <div class="entry-summary" data-action="toggle" role="button" tabindex="0" aria-expanded="${isExpanded}">
@@ -984,6 +1035,7 @@ function renderList(orders) {
       </div>
       <div class="entry-details">
         <ul class="order-lines">${linesHtml}</ul>
+        ${canModify ? `<div class="entry-actions">${modifyActionsHtml}</div>` : ''}
       </div>
     `;
     listEl.appendChild(li);
@@ -1039,12 +1091,14 @@ async function submitOrder() {
     return;
   }
 
+  const isEdit = editingId != null;
   setBusy(true);
-  setStatus('Enregistrement…');
+  setStatus(isEdit ? 'Modification…' : 'Enregistrement…');
 
   try {
-    const response = await fetch(DATA_URL, {
-      method: 'POST',
+    const url = isEdit ? `${DATA_URL}/${editingId}` : DATA_URL;
+    const response = await fetch(url, {
+      method: isEdit ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         items: draftLines.map((line) => ({
@@ -1065,19 +1119,33 @@ async function submitOrder() {
     const savedOrder = body?.id ? body : null;
 
     resetForm();
-    showTodayAfterNewSale();
+    if (!isEdit) {
+      showTodayAfterNewSale();
+    }
     await fetchData();
     setStatus('');
-    showToast({
-      title: 'Vente enregistrée',
-      message: 'La vente a été ajoutée avec succès.',
-    });
+    showToast(
+      isEdit
+        ? {
+            title: 'Vente modifiée',
+            message: 'Les modifications ont été enregistrées.',
+          }
+        : {
+            title: 'Vente enregistrée',
+            message: 'La vente a été ajoutée avec succès.',
+          },
+    );
 
-    if (savedOrder && window.caissePrint?.autoPrint) {
+    if (!isEdit && savedOrder && window.caissePrint?.autoPrint) {
       await printSaleReceipt(savedOrder, { quiet: true });
     }
   } catch (err) {
-    setStatus(`Échec de l'enregistrement : ${err.message}`, 'error');
+    setStatus(
+      isEdit
+        ? `Échec de la modification : ${err.message}`
+        : `Échec de l'enregistrement : ${err.message}`,
+      'error',
+    );
   } finally {
     setBusy(false);
   }
@@ -1111,6 +1179,10 @@ async function fetchData() {
 
     renderList(orders);
 
+    if (editingId != null && !orders.some((order) => order.id === editingId)) {
+      resetForm();
+    }
+
     if (statsResponse.ok) {
       renderKpis(await statsResponse.json());
     }
@@ -1124,6 +1196,52 @@ async function fetchData() {
     empty.textContent = `Impossible de charger les données. L'API est-elle démarrée sur ${API_BASE_URL} ?`;
     listEl.appendChild(empty);
     setStatus(`Échec du chargement : ${err.message}`, 'error');
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteOrder(id) {
+  if (!canModifyOrder()) {
+    return;
+  }
+
+  const confirmed = await showConfirmDialog({
+    title: `Supprimer la vente #${id} ?`,
+    message:
+      'Cette action est irréversible. Tous les articles de cette vente seront définitivement supprimés.',
+  });
+  if (!confirmed) return;
+
+  setBusy(true);
+  setStatus('Suppression…');
+
+  try {
+    const response = await fetch(`${DATA_URL}/${id}`, { method: 'DELETE' });
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        body.error || `Le serveur a répondu avec le code ${response.status}`,
+      );
+    }
+
+    if (editingId === id || expandedOrderId === id) {
+      if (editingId === id) {
+        resetForm();
+      } else {
+        expandedOrderId = null;
+      }
+    }
+
+    await fetchData();
+    setStatus('');
+    showToast({
+      title: 'Vente supprimée',
+      message: 'La vente a été retirée définitivement.',
+    });
+  } catch (err) {
+    setStatus(`Échec de la suppression : ${err.message}`, 'error');
   } finally {
     setBusy(false);
   }
@@ -1223,6 +1341,17 @@ listEl.addEventListener('click', (event) => {
     return;
   }
 
+  if (actionEl.dataset.action === 'edit') {
+    const order = lastOrders.find((row) => row.id === id);
+    if (order) {
+      startEdit(order);
+    }
+    return;
+  }
+
+  if (actionEl.dataset.action === 'delete') {
+    deleteOrder(id);
+  }
 });
 
 listEl.addEventListener('keydown', (event) => {
@@ -1285,10 +1414,30 @@ async function initAppVersion() {
   }
 }
 
-initAppVersion();
+function updateAuthRoleBadge() {
+  const badge = document.getElementById('authRoleBadge');
+  if (!badge) return;
+  badge.hidden = !isAdminUser();
+}
 
-initSaleEntryInputs();
-initNumpad();
-updateThemeToggleUi(getTheme());
-updatePeriodUi();
-fetchData();
+async function initAuthRole() {
+  try {
+    const result = await window.caisseAuth?.getRole?.();
+    authRole = result?.role === 'admin' ? 'admin' : 'user';
+  } catch (_) {
+    authRole = 'user';
+  }
+  updateAuthRoleBadge();
+}
+
+async function bootstrapApp() {
+  await initAuthRole();
+  await initAppVersion();
+  initSaleEntryInputs();
+  initNumpad();
+  updateThemeToggleUi(getTheme());
+  updatePeriodUi();
+  fetchData();
+}
+
+bootstrapApp();

@@ -8,6 +8,7 @@ const { printOrderReceipt, printDaySummaryReceipt } = require('./receipt-print')
 
 let mainWindow = null;
 let appUnlocked = false;
+let authRole = 'user';
 
 function resolveAppIconPath() {
   const candidates = [
@@ -120,6 +121,7 @@ function createAppWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
     appUnlocked = false;
+    authRole = 'user';
     attachMainWindow(null);
   });
 
@@ -130,20 +132,27 @@ function createAppWindow() {
   }
 }
 
-ipcMain.handle('auth-unlock', async () => {
+ipcMain.handle('auth-unlock', async (_event, payload) => {
+  const role = payload?.role === 'admin' ? 'admin' : 'user';
+  authRole = role;
+
   if (appUnlocked) {
-    return { ok: true };
+    return { ok: true, role: authRole };
   }
   appUnlocked = true;
 
   if (!mainWindow || mainWindow.isDestroyed()) {
     createAppWindow();
-    return { ok: true };
+    return { ok: true, role: authRole };
   }
 
   await loadMainPage();
-  return { ok: true };
+  return { ok: true, role: authRole };
 });
+
+ipcMain.handle('auth-get-role', () => ({
+  role: appUnlocked && authRole === 'admin' ? 'admin' : 'user',
+}));
 
 ipcMain.handle('print-receipt', async (_event, payload) => {
   const { order, options = {} } = payload || {};

@@ -1,5 +1,8 @@
-const ACCESS_CODE = '0402';
-const CODE_LENGTH = ACCESS_CODE.length;
+const ACCESS_CODES = {
+  '0402': 'user',
+  '1231': 'admin',
+};
+const CODE_LENGTH = 4;
 
 const dotsEl = document.getElementById('authDots');
 const messageEl = document.getElementById('authMessage');
@@ -32,12 +35,16 @@ function shake() {
 function tryUnlock() {
   if (digits.length < CODE_LENGTH) return;
 
-  if (digits === ACCESS_CODE) {
-    setMessage('Acces autorise…', 'success');
+  const role = ACCESS_CODES[digits];
+  if (role) {
+    setMessage(
+      role === 'admin' ? 'Acces administrateur…' : 'Acces autorise…',
+      'success',
+    );
     numpadEl.querySelectorAll('button').forEach((btn) => {
       btn.disabled = true;
     });
-    window.caisseAuth.unlock().catch(() => {
+    window.caisseAuth.unlock({ role }).catch(() => {
       setMessage('Erreur de demarrage.', 'error');
     });
     return;

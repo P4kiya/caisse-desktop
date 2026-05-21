@@ -451,6 +451,12 @@ function formatDayKeyPlain(key) {
   return `${d}/${m}/${date.getFullYear()}`;
 }
 
+/** Heure pour ticket recap (ex. 14:30:15) */
+function formatTimePlain(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 /** Mois court pour ticket recap (ex. 05/2026) */
 function formatMonthKeyPlain(anchorKey) {
   const date = parseDateKey(toMonthAnchor(anchorKey));
@@ -958,6 +964,9 @@ async function printPeriodSummary(kind) {
     await window.caissePrint.printDaySummary(lastOrders, {
       summaryKind: kind,
       periodLabel: `${periodPrefix} : ${periodLabel}`,
+      timeLabel: isDay
+        ? `Heure : ${formatTimePlain()}`
+        : `Imprime : ${formatDayKeyPlain(toDateKey(new Date()))} ${formatTimePlain()}`,
       deviceName: window.caissePrint.deviceName || undefined,
     });
     setStatus('');

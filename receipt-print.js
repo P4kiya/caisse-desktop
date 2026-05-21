@@ -290,6 +290,7 @@ function buildThermalDaySummaryText(orders, options = {}) {
     '',
     thermalRule(),
     thermalLineLeft(periodLabel),
+    ...(options.timeLabel ? ['', thermalLineLeft(options.timeLabel)] : []),
     '',
     padLine('Nombre de ventes', String(list.length)),
     padLine('Recette', formatMoneyPlain(grandTotal)),
@@ -545,6 +546,7 @@ function buildDaySummaryReceiptHtml(orders, options = {}) {
     <p class="shop">${escapeHtml(shopName)}</p>
     <p class="subtitle">${escapeHtml(htmlSubtitle)}</p>
     <p class="period">${escapeHtml(periodLabel)}</p>
+    ${options.timeLabel ? `<p class="period">${escapeHtml(options.timeLabel)}</p>` : ''}
     <div class="summary-row"><span>Nombre de ventes</span><strong>${list.length}</strong></div>
     <div class="summary-row grand"><span>Recette</span><span>${formatMoney(grandTotal)}</span></div>
   </div>

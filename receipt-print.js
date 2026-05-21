@@ -22,6 +22,15 @@ function formatMoney(value) {
   );
 }
 
+/** Sans espaces speciaux / locale — lisible sur pilote Generic Text Only */
+function formatMoneyPlain(value) {
+  const num = Number(value);
+  if (Number.isNaN(num)) return '0,00 DH';
+  const fixed = Math.abs(num).toFixed(2).replace('.', ',');
+  const sign = num < 0 ? '-' : '';
+  return `${sign}${fixed} DH`;
+}
+
 function formatSavedAt(value) {
   if (!value) return '—';
   const date = new Date(value);
@@ -30,6 +39,52 @@ function formatSavedAt(value) {
     dateStyle: 'short',
     timeStyle: 'medium',
   });
+}
+
+function formatSavedAtPlain(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/** Largeur utile rouleau 80 mm (~12 cpi) */
+const THERMAL_LINE_WIDTH = 40;
+/** Lignes d avance papier (espaces : les lignes vides sont ignorees par POS-80) */
+const THERMAL_FEED_LINES = 10;
+const THERMAL_FEED_MM_BOTTOM = 18;
+
+function centerText(text, width = THERMAL_LINE_WIDTH) {
+  const line = String(text || '').trim();
+  if (line.length >= width) return line.slice(0, width);
+  const left = Math.floor((width - line.length) / 2);
+  return ' '.repeat(left) + line;
+}
+
+function padLine(left, right, width = THERMAL_LINE_WIDTH) {
+  const l = String(left || '');
+  const r = String(right || '');
+  const gap = width - l.length - r.length;
+  if (gap >= 1) return l + ' '.repeat(gap) + r;
+  return `${l.slice(0, width - r.length - 1)} ${r}`;
+}
+
+function thermalRule(char = '-') {
+  return char.repeat(Math.min(32, THERMAL_LINE_WIDTH));
+}
+
+function thermalLineLeft(text) {
+  return String(text ?? '').trim().slice(0, THERMAL_LINE_WIDTH);
+}
+
+/** Une ligne d avance papier (caracteres visibles pour le pilote Generic Text) */
+function thermalFeedLine() {
+  return '\u00A0'.repeat(THERMAL_LINE_WIDTH);
+}
+
+function thermalFeedLines(count = THERMAL_FEED_LINES) {
+  return Array.from({ length: count }, () => thermalFeedLine());
 }
 
 function orderTotal(order) {
@@ -116,15 +171,132 @@ function findAutoReceiptPrinter(printers) {
 function ticketLayoutCss(thermal) {
   if (thermal) {
     return `
-    @page { size: 80mm auto; margin: 2mm; }
-    body { font-size: 10pt; }
-    .shop { font-size: 13pt !important; }
-    .total-row { font-size: 12pt !important; }
+    @page { size: 80mm auto; margin: 0 1mm 8mm 1mm; }
+    body { margin: 0; padding: 0; }
     `;
   }
   return `
     @page { size: A5 portrait; margin: 10mm 12mm; }
   `;
+}
+
+function wrapThermalPre(text) {
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    ${ticketLayoutCss(true)}
+    body {
+      margin: 0;
+      padding: 0;
+      text-align: left;
+      direction: ltr;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 13px;
+      line-height: 1.4;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+    }
+    .feed-after {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      font-size: 1px;
+      line-height: 1px;
+      color: #fff;
+    }
+    .feed-after {
+      height: ${THERMAL_FEED_MM_BOTTOM}mm;
+      min-height: ${THERMAL_FEED_MM_BOTTOM}mm;
+    }
+    pre {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      text-align: left;
+      direction: ltr;
+      white-space: pre;
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+    }
+  </style>
+</head>
+<body>
+  <pre>${escapeHtml(text)}</pre>
+  <div class="feed-after">${'&nbsp;<br>'.repeat(10)}</div>
+</body>
+</html>`;
+}
+
+function buildThermalReceiptText(order, options = {}) {
+  const shopName = (options.shopName || 'Caisse').toUpperCase();
+  const items = order.items || [];
+  const total = orderTotal(order);
+  const lines = [
+    centerText(shopName),
+    thermalLineLeft('TICKET DE VENTE'),
+    '',
+    thermalRule(),
+    thermalLineLeft(`Vente #${order.id}`),
+    thermalLineLeft(formatSavedAtPlain(order.savedAt)),
+    thermalRule(),
+    '',
+  ];
+
+  for (const item of items) {
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.price) || 0;
+    const lineTotal = price * qty;
+    lines.push(formatLineEquationPlain(price, qty, lineTotal));
+  }
+
+  lines.push(
+    thermalRule(),
+    padLine('TOTAL', formatMoneyPlain(total)),
+    thermalRule(),
+    '',
+    thermalLineLeft('Merci de votre visite'),
+    ...thermalFeedLines(),
+  );
+  return lines.join('\n');
+}
+
+function formatLineEquationPlain(price, quantity, lineTotal) {
+  const qty = Number(quantity) || 0;
+  const left = `${qty} x ${formatMoneyPlain(price)}`;
+  const right = `= ${formatMoneyPlain(lineTotal ?? price * qty)}`;
+  return padLine(left, right);
+}
+
+function buildThermalDaySummaryText(orders, options = {}) {
+  const shopName = (options.shopName || 'Caisse').toUpperCase();
+  const periodLabel = options.periodLabel || "Aujourd'hui";
+  const list = Array.isArray(orders) ? orders : [];
+  const grandTotal = list.reduce((sum, order) => sum + orderTotal(order), 0);
+  const lines = [
+    centerText(shopName),
+    thermalLineLeft('RECAP VENTES'),
+    thermalLineLeft(periodLabel),
+    '',
+    thermalRule(),
+  ];
+
+  for (const order of list) {
+    lines.push(padLine(`#${order.id}`, formatMoneyPlain(orderTotal(order))));
+  }
+
+  lines.push(
+    thermalRule(),
+    padLine('Nombre', String(list.length)),
+    padLine('TOTAL', formatMoneyPlain(grandTotal)),
+    thermalRule(),
+    '',
+    thermalLineLeft('Totaux uniquement'),
+    ...thermalFeedLines(),
+  );
+  return lines.join('\n');
 }
 
 function getElectronPrintOptions(deviceName) {
@@ -133,10 +305,10 @@ function getElectronPrintOptions(deviceName) {
       pageSize: { width: 80000, height: 297000 },
       margins: {
         marginType: 'custom',
-        top: 0.08,
-        bottom: 0.08,
-        left: 0.08,
-        right: 0.08,
+        top: 0.05,
+        bottom: 0.7,
+        left: 0.04,
+        right: 0.04,
       },
     };
   }
@@ -192,6 +364,10 @@ async function resolvePhysicalPrinter(webContents, preferredName) {
 }
 
 function buildReceiptHtml(order, options = {}) {
+  if (options.thermal) {
+    return wrapThermalPre(buildThermalReceiptText(order, options));
+  }
+
   const shopName = options.shopName || 'Caisse';
   const items = order.items || [];
   const total = orderTotal(order);
@@ -321,6 +497,10 @@ function buildReceiptHtml(order, options = {}) {
 }
 
 function buildDaySummaryReceiptHtml(orders, options = {}) {
+  if (options.thermal) {
+    return wrapThermalPre(buildThermalDaySummaryText(orders, options));
+  }
+
   const shopName = options.shopName || 'Caisse';
   const periodLabel = options.periodLabel || "Aujourd'hui";
   const list = Array.isArray(orders) ? orders : [];
@@ -411,8 +591,8 @@ function printHtmlDocument(buildHtml, options = {}) {
   return new Promise((resolve, reject) => {
     const win = new BrowserWindow({
       show: false,
-      width: 320,
-      height: 800,
+      width: 280,
+      height: 720,
       webPreferences: {
         sandbox: true,
         nodeIntegration: false,
@@ -464,13 +644,15 @@ function printHtmlDocument(buildHtml, options = {}) {
 
       if (printStage === 'loading') {
         printStage = 'printing';
+        const deviceName = resolvedDeviceName;
+        const thermalPrint = isThermalReceiptPrinter(deviceName);
+        const printDelayMs = thermalPrint ? 450 : 200;
         setTimeout(() => {
-          const deviceName = resolvedDeviceName;
           const layout = getElectronPrintOptions(deviceName);
           const printOptions = {
             silent: true,
             deviceName,
-            printBackground: true,
+            printBackground: !thermalPrint,
             ...layout,
           };
 
@@ -486,7 +668,7 @@ function printHtmlDocument(buildHtml, options = {}) {
               reject(new Error(failureReason || 'Impression annulee'));
             }
           });
-        }, 200);
+        }, printDelayMs);
       }
     });
 

@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",

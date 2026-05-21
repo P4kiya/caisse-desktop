@@ -270,32 +270,32 @@ function formatLineEquationPlain(price, quantity, lineTotal) {
   return padLine(left, right);
 }
 
+function getSummaryTitles(options = {}) {
+  const isMonth = options.summaryKind === 'month';
+  return {
+    thermalTitle: isMonth ? 'RECAP DU MOIS' : 'RECAP DU JOUR',
+    htmlSubtitle: isMonth ? 'Recap du mois' : 'Recap du jour',
+  };
+}
+
 function buildThermalDaySummaryText(orders, options = {}) {
   const shopName = (options.shopName || 'Caisse').toUpperCase();
   const periodLabel = options.periodLabel || "Aujourd'hui";
+  const { thermalTitle } = getSummaryTitles(options);
   const list = Array.isArray(orders) ? orders : [];
   const grandTotal = list.reduce((sum, order) => sum + orderTotal(order), 0);
   const lines = [
     centerText(shopName),
-    thermalLineLeft('RECAP VENTES'),
+    thermalLineLeft(thermalTitle),
+    '',
+    thermalRule(),
     thermalLineLeft(periodLabel),
     '',
+    padLine('Nombre de ventes', String(list.length)),
+    padLine('Recette', formatMoneyPlain(grandTotal)),
     thermalRule(),
-  ];
-
-  for (const order of list) {
-    lines.push(padLine(`#${order.id}`, formatMoneyPlain(orderTotal(order))));
-  }
-
-  lines.push(
-    thermalRule(),
-    padLine('Nombre', String(list.length)),
-    padLine('TOTAL', formatMoneyPlain(grandTotal)),
-    thermalRule(),
-    '',
-    thermalLineLeft('Totaux uniquement'),
     ...thermalFeedLines(),
-  );
+  ];
   return lines.join('\n');
 }
 
@@ -503,19 +503,9 @@ function buildDaySummaryReceiptHtml(orders, options = {}) {
 
   const shopName = options.shopName || 'Caisse';
   const periodLabel = options.periodLabel || "Aujourd'hui";
+  const { htmlSubtitle } = getSummaryTitles(options);
   const list = Array.isArray(orders) ? orders : [];
   const grandTotal = list.reduce((sum, order) => sum + orderTotal(order), 0);
-
-  const rowsHtml = list
-    .map((order) => {
-      const total = orderTotal(order);
-      return `
-        <tr>
-          <td class="col-id">#${escapeHtml(order.id)}</td>
-          <td class="col-total">${formatMoney(total)}</td>
-        </tr>`;
-    })
-    .join('');
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -533,55 +523,30 @@ function buildDaySummaryReceiptHtml(orders, options = {}) {
     }
     .ticket { max-width: 100%; }
     .shop { font-size: 14pt; font-weight: 700; text-align: center; }
-    .subtitle { text-align: center; font-size: 10pt; color: #444; margin: 4px 0 14px; }
-    .period { text-align: center; font-weight: 600; margin-bottom: 12px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 6px 4px; border-bottom: 1px solid #ddd; }
-    th { font-size: 9pt; text-transform: uppercase; color: #555; text-align: left; }
-    .col-total { text-align: right; font-weight: 600; white-space: nowrap; }
-    .summary-footer {
-      margin-top: 14px;
-      padding-top: 10px;
-      border-top: 2px solid #111;
-    }
-    .summary-footer div {
+    .subtitle { font-size: 10pt; color: #444; margin: 4px 0 14px; }
+    .period { font-weight: 600; margin-bottom: 16px; }
+    .summary-row {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 6px;
+      margin-bottom: 10px;
+      font-size: 11pt;
     }
-    .summary-footer .grand {
-      font-size: 13pt;
+    .summary-row.grand {
+      font-size: 14pt;
       font-weight: 700;
-    }
-    .footer {
-      margin-top: 16px;
-      text-align: center;
-      font-size: 9.5pt;
-      color: #555;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 2px solid #111;
     }
   </style>
 </head>
 <body>
   <div class="ticket">
     <p class="shop">${escapeHtml(shopName)}</p>
-    <p class="subtitle">Recapitulatif des ventes</p>
+    <p class="subtitle">${escapeHtml(htmlSubtitle)}</p>
     <p class="period">${escapeHtml(periodLabel)}</p>
-    <table>
-      <thead>
-        <tr>
-          <th>Vente</th>
-          <th class="col-total">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rowsHtml || '<tr><td colspan="2">Aucune vente</td></tr>'}
-      </tbody>
-    </table>
-    <div class="summary-footer">
-      <div><span>Nombre de ventes</span><strong>${list.length}</strong></div>
-      <div class="grand"><span>TOTAL</span><span>${formatMoney(grandTotal)}</span></div>
-    </div>
-    <p class="footer">Totaux uniquement — sans detail articles</p>
+    <div class="summary-row"><span>Nombre de ventes</span><strong>${list.length}</strong></div>
+    <div class="summary-row grand"><span>Recette</span><span>${formatMoney(grandTotal)}</span></div>
   </div>
 </body>
 </html>`;

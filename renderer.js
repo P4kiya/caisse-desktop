@@ -48,6 +48,7 @@ const dayPrevBtn = document.getElementById('dayPrevBtn');
 const dayNextBtn = document.getElementById('dayNextBtn');
 const dayNavLabel = document.getElementById('dayNavLabel');
 const printAllDayBtn = document.getElementById('printAllDayBtn');
+const printAllMonthBtn = document.getElementById('printAllMonthBtn');
 
 const kpiAmount = document.getElementById('kpiAmount');
 const kpiEntries = document.getElementById('kpiEntries');
@@ -221,6 +222,10 @@ function setBusy(busy) {
   if (printAllDayBtn) {
     printAllDayBtn.disabled =
       busy || (currentPeriod === 'today' && lastOrders.length === 0);
+  }
+  if (printAllMonthBtn) {
+    printAllMonthBtn.disabled =
+      busy || (currentPeriod === 'month' && lastOrders.length === 0);
   }
   filterButtons.forEach((btn) => {
     btn.disabled = busy;
@@ -438,6 +443,21 @@ function parseDateKey(key) {
   return new Date(year, month - 1, day);
 }
 
+/** Date courte pour ticket recap (ex. 21/05/2026) */
+function formatDayKeyPlain(key) {
+  const date = parseDateKey(key);
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${d}/${m}/${date.getFullYear()}`;
+}
+
+/** Mois court pour ticket recap (ex. 05/2026) */
+function formatMonthKeyPlain(anchorKey) {
+  const date = parseDateKey(toMonthAnchor(anchorKey));
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${m}/${date.getFullYear()}`;
+}
+
 function isTodayKey(key) {
   return key === toDateKey(new Date());
 }
@@ -595,9 +615,14 @@ function updateDayNavUi() {
     dayNavLabel.textContent = getPeriodNavLabel();
   }
   if (printAllDayBtn) {
-    const showPrintAll = currentPeriod === 'today';
-    printAllDayBtn.hidden = !showPrintAll;
-    printAllDayBtn.disabled = showPrintAll && lastOrders.length === 0;
+    const showPrintDay = currentPeriod === 'today';
+    printAllDayBtn.hidden = !showPrintDay;
+    printAllDayBtn.disabled = showPrintDay && lastOrders.length === 0;
+  }
+  if (printAllMonthBtn) {
+    const showPrintMonth = currentPeriod === 'month';
+    printAllMonthBtn.hidden = !showPrintMonth;
+    printAllMonthBtn.disabled = showPrintMonth && lastOrders.length === 0;
   }
 }
 
@@ -900,14 +925,18 @@ function formatSavedAt(value) {
   return date.toLocaleString(LOCALE);
 }
 
-async function printAllDaySales() {
-  if (currentPeriod !== 'today') {
+async function printPeriodSummary(kind) {
+  const isDay = kind === 'day';
+  const expectedPeriod = isDay ? 'today' : 'month';
+  if (currentPeriod !== expectedPeriod) {
     return;
   }
   if (!lastOrders.length) {
     showToast({
       title: 'Aucune vente',
-      message: 'Aucune vente a imprimer pour cette journee.',
+      message: isDay
+        ? 'Aucune vente a imprimer pour cette journee.'
+        : 'Aucune vente a imprimer pour ce mois.',
       type: 'error',
     });
     return;
@@ -917,24 +946,40 @@ async function printAllDaySales() {
     return;
   }
 
+  const periodLabel = isDay
+    ? formatDayKeyPlain(viewDateKey)
+    : formatMonthKeyPlain(viewMonthAnchor);
+  const periodPrefix = isDay ? 'Date' : 'Mois';
+
   setBusy(true);
   setStatus('Impression du recap…');
 
   try {
     await window.caissePrint.printDaySummary(lastOrders, {
-      periodLabel: getPeriodDisplayLabel(),
+      summaryKind: kind,
+      periodLabel: `${periodPrefix} : ${periodLabel}`,
       deviceName: window.caissePrint.deviceName || undefined,
     });
     setStatus('');
     showToast({
       title: 'Impression',
-      message: `Recap de ${lastOrders.length} vente(s) envoye a l'imprimante.`,
+      message: isDay
+        ? `Recap jour : ${lastOrders.length} vente(s) imprime.`
+        : `Recap mois : ${lastOrders.length} vente(s) imprime.`,
     });
   } catch (err) {
     setStatus(`Impression : ${err.message}`, 'error');
   } finally {
     setBusy(false);
   }
+}
+
+async function printAllDaySales() {
+  return printPeriodSummary('day');
+}
+
+async function printAllMonthSales() {
+  return printPeriodSummary('month');
 }
 
 async function printSaleReceipt(order, { quiet = false } = {}) {
@@ -1376,6 +1421,7 @@ filterButtons.forEach((btn) => {
 dayPrevBtn?.addEventListener('click', () => shiftPeriodNav(-1));
 dayNextBtn?.addEventListener('click', () => shiftPeriodNav(1));
 printAllDayBtn?.addEventListener('click', printAllDaySales);
+printAllMonthBtn?.addEventListener('click', printAllMonthSales);
 
 addLineBtn.addEventListener('click', addLineToDraft);
 submitOrderBtn.addEventListener('click', submitOrder);

@@ -53,8 +53,19 @@ function isVirtualPrinterName(name) {
   );
 }
 
-/** SEYPOS / Sewoo PRP-320 and similar 80 mm ticket printers */
-const THERMAL_PRINTER_PATTERNS = ['prp-320', 'prp320', 'seypos', 'sewoo'];
+/** 80 mm thermal ticket printers (ESC/POS via pilote Windows) */
+const THERMAL_PRINTER_PATTERNS = [
+  'wd8260',
+  'wd-8260',
+  'wdlink',
+  'wdl8260',
+  'prp-320',
+  'prp320',
+  'seypos',
+  'sewoo',
+  'pos-80',
+  'thermal receipt',
+];
 
 function printerNameMatchesPatterns(name, patterns) {
   const normalized = String(name || '').toLowerCase();
@@ -91,8 +102,15 @@ function findPrinterByQuery(printers, query) {
 
 function findAutoReceiptPrinter(printers) {
   const physical = getPhysicalPrinters(printers);
-  const match = physical.find((p) => isThermalReceiptPrinter(p.name));
-  return match ? match.name : null;
+  for (const pattern of THERMAL_PRINTER_PATTERNS) {
+    const match = physical.find((p) =>
+      p.name.toLowerCase().includes(pattern),
+    );
+    if (match) {
+      return match.name;
+    }
+  }
+  return null;
 }
 
 function ticketLayoutCss(thermal) {
@@ -137,7 +155,9 @@ function getElectronPrintOptions(deviceName) {
 async function resolvePhysicalPrinter(webContents, preferredName) {
   const printers = await webContents.getPrintersAsync();
   if (!Array.isArray(printers) || printers.length === 0) {
-    throw new Error('Aucune imprimante detectee sur ce PC.');
+    throw new Error(
+      'Aucune imprimante detectee sur ce PC. Branchez l imprimante USB, puis lancez (admin) : powershell -File C:\\caisse\\setup\\scripts\\Install-Pos80Printer.ps1',
+    );
   }
 
   const fromQuery = findPrinterByQuery(printers, preferredName);
@@ -167,7 +187,7 @@ async function resolvePhysicalPrinter(webContents, preferredName) {
   }
 
   throw new Error(
-    'Imprimante ticket introuvable. Installez le pilote SEYPOS PRP-320 (80 mm), connectez l imprimante, puis definissez PRINT_PRINTER=PRP-320 dans caisse-desktop\\.env',
+    'Imprimante ticket introuvable. Lancez Install-Pos80Printer.ps1 (C:\\caisse\\setup\\scripts), puis definissez PRINT_PRINTER=POS-80 dans .env',
   );
 }
 

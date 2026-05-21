@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -57,6 +57,10 @@
       {
         "from": "../setup/scripts/Start-CaisseApi.ps1",
         "to": "setup/scripts/Start-CaisseApi.ps1"
+      },
+      {
+        "from": "../setup/scripts/Install-Pos80Printer.ps1",
+        "to": "setup/scripts/Install-Pos80Printer.ps1"
       }
     ],
     "publish": [

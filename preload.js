@@ -18,7 +18,7 @@ const shopName = (process.env.SHOP_NAME || 'Caisse').trim() || 'Caisse';
 const printAuto = process.env.PRINT_AUTO !== '0';
 // Default: print directly to the default printer (no dialog, no PDF file).
 const printSilent = process.env.PRINT_SILENT !== '0';
-const printDeviceName = (process.env.PRINT_PRINTER || 'PRP-320').trim();
+const printDeviceName = (process.env.PRINT_PRINTER || 'POS-80').trim();
 
 const UPDATE_CHANNELS = [
   'update-checking',

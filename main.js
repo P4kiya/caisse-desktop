@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { loadClientEnv } = require('./client-env');
+loadClientEnv(__dirname);
 const { setupUpdaterIpc, attachMainWindow } = require('./updater');
 const { ensureBackendRunning } = require('./backend-launcher');
 const { printOrderReceipt, printDaySummaryReceipt } = require('./receipt-print');

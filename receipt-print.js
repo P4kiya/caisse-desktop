@@ -49,43 +49,7 @@ function formatSavedAtPlain(value) {
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-/** Largeur utile rouleau 80 mm (~12 cpi) */
-const THERMAL_LINE_WIDTH = 40;
-/** Lignes d avance papier (espaces : les lignes vides sont ignorees par POS-80) */
-const THERMAL_FEED_LINES = 10;
 const THERMAL_FEED_MM_BOTTOM = 18;
-
-function centerText(text, width = THERMAL_LINE_WIDTH) {
-  const line = String(text || '').trim();
-  if (line.length >= width) return line.slice(0, width);
-  const left = Math.floor((width - line.length) / 2);
-  return ' '.repeat(left) + line;
-}
-
-function padLine(left, right, width = THERMAL_LINE_WIDTH) {
-  const l = String(left || '');
-  const r = String(right || '');
-  const gap = width - l.length - r.length;
-  if (gap >= 1) return l + ' '.repeat(gap) + r;
-  return `${l.slice(0, width - r.length - 1)} ${r}`;
-}
-
-function thermalRule(char = '-') {
-  return char.repeat(Math.min(32, THERMAL_LINE_WIDTH));
-}
-
-function thermalLineLeft(text) {
-  return String(text ?? '').trim().slice(0, THERMAL_LINE_WIDTH);
-}
-
-/** Une ligne d avance papier (caracteres visibles pour le pilote Generic Text) */
-function thermalFeedLine() {
-  return '\u00A0'.repeat(THERMAL_LINE_WIDTH);
-}
-
-function thermalFeedLines(count = THERMAL_FEED_LINES) {
-  return Array.from({ length: count }, () => thermalFeedLine());
-}
 
 function orderTotal(order) {
   if (order.total != null) return Number(order.total);
@@ -180,94 +144,125 @@ function ticketLayoutCss(thermal) {
   `;
 }
 
-function wrapThermalPre(text) {
+function thermalTicketStyles() {
+  return `
+    ${ticketLayoutCss(true)}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      margin: 0;
+      padding: 0 3mm;
+      font-family: Arial, "Segoe UI", Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .ticket { width: 100%; max-width: 72mm; }
+    .shop {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 15px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .line {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 5px 0;
+    }
+    .rule {
+      border: none;
+      border-top: 2px solid #000;
+      margin: 10px 0;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      margin: 6px 0;
+    }
+    .row .value {
+      font-weight: 800;
+      white-space: nowrap;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .row-total {
+      font-size: 16px;
+      font-weight: 800;
+      margin-top: 8px;
+    }
+    .footer {
+      text-align: left;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 10px;
+    }
+    .feed-after {
+      display: block;
+      height: ${THERMAL_FEED_MM_BOTTOM}mm;
+      min-height: ${THERMAL_FEED_MM_BOTTOM}mm;
+    }
+  `;
+}
+
+function wrapThermalHtml(ticketBodyHtml) {
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <style>
-    ${ticketLayoutCss(true)}
-    body {
-      margin: 0;
-      padding: 0;
-      text-align: left;
-      direction: ltr;
-      font-family: "Courier New", Courier, monospace;
-      font-size: 13px;
-      line-height: 1.4;
-      color: #000;
-      -webkit-print-color-adjust: exact;
-    }
-    .feed-after {
-      display: block;
-      width: 100%;
-      overflow: hidden;
-      font-size: 1px;
-      line-height: 1px;
-      color: #fff;
-    }
-    .feed-after {
-      height: ${THERMAL_FEED_MM_BOTTOM}mm;
-      min-height: ${THERMAL_FEED_MM_BOTTOM}mm;
-    }
-    pre {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      text-align: left;
-      direction: ltr;
-      white-space: pre;
-      font-family: inherit;
-      font-size: inherit;
-      line-height: inherit;
-    }
-  </style>
+  <style>${thermalTicketStyles()}</style>
 </head>
 <body>
-  <pre>${escapeHtml(text)}</pre>
-  <div class="feed-after">${'&nbsp;<br>'.repeat(10)}</div>
+  <div class="ticket">${ticketBodyHtml}</div>
+  <div class="feed-after"></div>
 </body>
 </html>`;
 }
 
-function buildThermalReceiptText(order, options = {}) {
+function thermalRowHtml(label, value, extraClass = '') {
+  return `<div class="row ${extraClass}"><span>${escapeHtml(label)}</span><span class="value">${escapeHtml(value)}</span></div>`;
+}
+
+function buildThermalReceiptHtml(order, options = {}) {
   const shopName = (options.shopName || 'Caisse').toUpperCase();
   const items = order.items || [];
   const total = orderTotal(order);
-  const lines = [
-    centerText(shopName),
-    thermalLineLeft('TICKET DE VENTE'),
-    '',
-    thermalRule(),
-    thermalLineLeft(`Vente #${order.id}`),
-    thermalLineLeft(formatSavedAtPlain(order.savedAt)),
-    thermalRule(),
-    '',
-  ];
+  const itemsHtml = items
+    .map((item) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const lineTotal = price * qty;
+      return thermalRowHtml(
+        `${qty} x ${formatMoneyPlain(price)}`,
+        formatMoneyPlain(lineTotal),
+      );
+    })
+    .join('');
 
-  for (const item of items) {
-    const qty = Number(item.quantity) || 0;
-    const price = Number(item.price) || 0;
-    const lineTotal = price * qty;
-    lines.push(formatLineEquationPlain(price, qty, lineTotal));
-  }
-
-  lines.push(
-    thermalRule(),
-    padLine('TOTAL', formatMoneyPlain(total)),
-    thermalRule(),
-    '',
-    thermalLineLeft('Merci de votre visite'),
-    ...thermalFeedLines(),
-  );
-  return lines.join('\n');
-}
-
-function formatLineEquationPlain(price, quantity, lineTotal) {
-  const qty = Number(quantity) || 0;
-  const left = `${qty} x ${formatMoneyPlain(price)}`;
-  const right = `= ${formatMoneyPlain(lineTotal ?? price * qty)}`;
-  return padLine(left, right);
+  return wrapThermalHtml(`
+    <p class="shop">${escapeHtml(shopName)}</p>
+    <p class="subtitle">TICKET DE VENTE</p>
+    <hr class="rule" />
+    <p class="line">Vente #${escapeHtml(order.id)}</p>
+    <p class="line">${escapeHtml(formatSavedAtPlain(order.savedAt))}</p>
+    <hr class="rule" />
+    ${itemsHtml}
+    <hr class="rule" />
+    ${thermalRowHtml('TOTAL', formatMoneyPlain(total), 'row-total')}
+    <hr class="rule" />
+    <p class="footer">Merci de votre visite</p>
+  `);
 }
 
 function getSummaryTitles(options = {}) {
@@ -278,26 +273,26 @@ function getSummaryTitles(options = {}) {
   };
 }
 
-function buildThermalDaySummaryText(orders, options = {}) {
+function buildThermalDaySummaryHtml(orders, options = {}) {
   const shopName = (options.shopName || 'Caisse').toUpperCase();
   const periodLabel = options.periodLabel || "Aujourd'hui";
   const { thermalTitle } = getSummaryTitles(options);
   const list = Array.isArray(orders) ? orders : [];
   const grandTotal = list.reduce((sum, order) => sum + orderTotal(order), 0);
-  const lines = [
-    centerText(shopName),
-    thermalLineLeft(thermalTitle),
-    '',
-    thermalRule(),
-    thermalLineLeft(periodLabel),
-    ...(options.timeLabel ? ['', thermalLineLeft(options.timeLabel)] : []),
-    '',
-    padLine('Nombre de ventes', String(list.length)),
-    padLine('Recette', formatMoneyPlain(grandTotal)),
-    thermalRule(),
-    ...thermalFeedLines(),
-  ];
-  return lines.join('\n');
+  const timeLine = options.timeLabel
+    ? `<p class="line">${escapeHtml(options.timeLabel)}</p>`
+    : '';
+
+  return wrapThermalHtml(`
+    <p class="shop">${escapeHtml(shopName)}</p>
+    <p class="subtitle">${escapeHtml(thermalTitle)}</p>
+    <hr class="rule" />
+    <p class="line">${escapeHtml(periodLabel)}</p>
+    ${timeLine}
+    ${thermalRowHtml('Nombre de ventes', String(list.length))}
+    ${thermalRowHtml('Recette', formatMoneyPlain(grandTotal), 'row-total')}
+    <hr class="rule" />
+  `);
 }
 
 function getElectronPrintOptions(deviceName) {
@@ -338,13 +333,19 @@ async function resolvePhysicalPrinter(webContents, preferredName) {
     return fromQuery;
   }
 
+  const receiptPrinter = findAutoReceiptPrinter(printers);
+  if (preferredName && receiptPrinter) {
+    return receiptPrinter;
+  }
+
   if (preferredName) {
+    const physical = getPhysicalPrinters(printers);
+    const names = physical.map((p) => p.name).join(' | ');
     throw new Error(
-      `Imprimante « ${preferredName} » introuvable. Verifiez le nom dans Parametres Windows > Imprimantes ou dans PRINT_PRINTER (.env).`,
+      `Imprimante « ${preferredName} » introuvable. Detectees : ${names || 'aucune'}. Mettez PRINT_PRINTER=WD8260 dans .env (nom partiel) ou renommez l imprimante en POS-80.`,
     );
   }
 
-  const receiptPrinter = findAutoReceiptPrinter(printers);
   if (receiptPrinter) {
     return receiptPrinter;
   }
@@ -366,7 +367,7 @@ async function resolvePhysicalPrinter(webContents, preferredName) {
 
 function buildReceiptHtml(order, options = {}) {
   if (options.thermal) {
-    return wrapThermalPre(buildThermalReceiptText(order, options));
+    return buildThermalReceiptHtml(order, options);
   }
 
   const shopName = options.shopName || 'Caisse';
@@ -499,7 +500,7 @@ function buildReceiptHtml(order, options = {}) {
 
 function buildDaySummaryReceiptHtml(orders, options = {}) {
   if (options.thermal) {
-    return wrapThermalPre(buildThermalDaySummaryText(orders, options));
+    return buildThermalDaySummaryHtml(orders, options);
   }
 
   const shopName = options.shopName || 'Caisse';
@@ -619,7 +620,7 @@ function printHtmlDocument(buildHtml, options = {}) {
           const printOptions = {
             silent: true,
             deviceName,
-            printBackground: !thermalPrint,
+            printBackground: true,
             ...layout,
           };
 

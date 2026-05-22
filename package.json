@@ -1,6 +1,6 @@
 {
   "name": "caisse-desktop",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "description": "Electron desktop client for caisse",
   "main": "main.js",
   "author": "",
@@ -29,6 +29,7 @@
     "icon": "build/icon.png",
     "files": [
       "main.js",
+      "client-env.js",
       "receipt-print.js",
       "backend-launcher.js",
       "updater.js",

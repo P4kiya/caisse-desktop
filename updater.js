@@ -14,6 +14,21 @@ let ipcRegistered = false;
 let autoUpdaterConfigured = false;
 let checkInFlight = null;
 
+function isNetworkOfflineError(message) {
+  const msg = String(message || '').toLowerCase();
+  return (
+    msg.includes('err_internet_disconnected') ||
+    msg.includes('internet_disconnected') ||
+    msg.includes('err_network_changed') ||
+    msg.includes('err_name_not_resolved') ||
+    msg.includes('err_connection_timed_out') ||
+    msg.includes('err_connection_refused') ||
+    msg.includes('eai_again') ||
+    msg.includes('getaddrinfo') ||
+    msg.includes('net::')
+  );
+}
+
 function compareVersions(left, right) {
   const parse = (value) =>
     String(value || '')
@@ -146,8 +161,14 @@ function configureAutoUpdater() {
   });
 
   autoUpdater.on('error', (error) => {
-    log.error('Auto-updater error:', error?.message || error);
-    send('update-error', { message: error?.message || String(error) });
+    const message = error?.message || String(error);
+    // Si Internet est coupé, on ne montre rien côté UI.
+    if (isNetworkOfflineError(message)) {
+      log.warn('Auto-updater (offline):', message);
+      return;
+    }
+    log.error('Auto-updater error:', message);
+    send('update-error', { message });
   });
 }
 
@@ -210,7 +231,10 @@ async function performUpdateCheck() {
         log.warn('latest.yml recovery failed:', yamlError?.message || yamlError);
       }
 
-      send('update-error', { message });
+      // Pas de popup quand Internet est coupé.
+      if (!isNetworkOfflineError(message)) {
+        send('update-error', { message });
+      }
       throw error;
     } finally {
       checkInFlight = null;

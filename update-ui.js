@@ -16,9 +16,32 @@
 
   if (actionsEl) actionsEl.hidden = true;
 
+  function isNetworkOfflineError(message) {
+    const msg = String(message || '').toLowerCase();
+    return (
+      msg.includes('err_internet_disconnected') ||
+      msg.includes('internet_disconnected') ||
+      msg.includes('network') && msg.includes('disconnected') ||
+      msg.includes('err_network_changed') ||
+      msg.includes('err_name_not_resolved') ||
+      msg.includes('err_connection_timed_out') ||
+      msg.includes('err_connection_refused') ||
+      msg.includes('eai_again') ||
+      msg.includes('getaddrinfo') ||
+      msg.includes('net::')
+    );
+  }
+
   function formatVersion(value) {
     const v = String(value || '').trim();
     return v ? (v.startsWith('v') ? v : `v${v}`) : '';
+  }
+
+  function hideBanner() {
+    updateInProgress = false;
+    banner.classList.remove('is-visible');
+    banner.setAttribute('aria-hidden', 'true');
+    banner.hidden = true;
   }
 
   function showBanner() {
@@ -83,6 +106,11 @@
         showRestarting(payload?.version);
         break;
       case 'update-error':
+        // Ne pas afficher de popup si le PC n'a pas Internet.
+        if (isNetworkOfflineError(payload?.message) || navigator.onLine === false) {
+          hideBanner();
+          break;
+        }
         updateInProgress = false;
         if (progressWrap) progressWrap.hidden = true;
         setBannerMessage(

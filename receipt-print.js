@@ -236,6 +236,9 @@ function thermalRowHtml(label, value, extraClass = '') {
 
 function buildThermalReceiptHtml(order, options = {}) {
   const shopName = (options.shopName || 'Caisse').toUpperCase();
+  const duplicateBadge = options.isDuplicate
+    ? '<p class="subtitle">*** DUPLICATE ***</p>'
+    : '';
   const items = order.items || [];
   const total = orderTotal(order);
   const itemsHtml = items
@@ -252,6 +255,7 @@ function buildThermalReceiptHtml(order, options = {}) {
 
   return wrapThermalHtml(`
     <p class="shop">${escapeHtml(shopName)}</p>
+    ${duplicateBadge}
     <p class="subtitle">TICKET DE VENTE</p>
     <hr class="rule" />
     <p class="line">Vente #${escapeHtml(order.id)}</p>
@@ -371,6 +375,9 @@ function buildReceiptHtml(order, options = {}) {
   }
 
   const shopName = options.shopName || 'Caisse';
+  const duplicateBadge = options.isDuplicate
+    ? '<p class="subtitle duplicate">DUPLICATE</p>'
+    : '';
   const items = order.items || [];
   const total = orderTotal(order);
   const linesHtml = items
@@ -414,6 +421,12 @@ function buildReceiptHtml(order, options = {}) {
       font-size: 10pt;
       color: #444;
       margin-bottom: 14px;
+    }
+    .subtitle.duplicate {
+      color: #111;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
     }
     .meta {
       font-size: 10pt;
@@ -471,6 +484,7 @@ function buildReceiptHtml(order, options = {}) {
 <body>
   <div class="ticket">
     <p class="shop">${escapeHtml(shopName)}</p>
+    ${duplicateBadge}
     <p class="subtitle">Ticket de vente</p>
     <div class="meta">
       <div><span>N° vente</span><strong>#${escapeHtml(order.id)}</strong></div>

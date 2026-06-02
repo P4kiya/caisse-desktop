@@ -991,7 +991,7 @@ async function printAllMonthSales() {
   return printPeriodSummary('month');
 }
 
-async function printSaleReceipt(order, { quiet = false } = {}) {
+async function printSaleReceipt(order, { quiet = false, duplicate = false } = {}) {
   if (!order?.id) return;
 
   if (!window.caissePrint?.printReceipt) {
@@ -1003,12 +1003,15 @@ async function printSaleReceipt(order, { quiet = false } = {}) {
 
   try {
     await window.caissePrint.printReceipt(order, {
+      isDuplicate: duplicate,
       deviceName: window.caissePrint.deviceName || undefined,
     });
     if (!quiet) {
       showToast({
         title: 'Impression',
-        message: `Ticket de la vente #${order.id} envoyé à l'imprimante.`,
+        message: duplicate
+          ? `Duplicata de la vente #${order.id} envoyé à l'imprimante.`
+          : `Ticket de la vente #${order.id} envoyé à l'imprimante.`,
       });
     }
   } catch (err) {
@@ -1084,6 +1087,7 @@ function renderList(orders) {
         <div class="summary-end">
           <span class="summary-total">${formatMoney(total)}</span>
           <button type="button" class="btn-entry btn-print summary-print" data-action="print">Imprimer</button>
+          <button type="button" class="btn-entry btn-print summary-print" data-action="duplicate">Dupliquer</button>
           <span class="summary-chevron" aria-hidden="true">▼</span>
         </div>
       </div>
@@ -1391,6 +1395,15 @@ listEl.addEventListener('click', (event) => {
     const order = lastOrders.find((row) => row.id === id);
     if (order) {
       printSaleReceipt(order);
+    }
+    return;
+  }
+
+  if (actionEl.dataset.action === 'duplicate') {
+    event.stopPropagation();
+    const order = lastOrders.find((row) => row.id === id);
+    if (order) {
+      printSaleReceipt(order, { duplicate: true });
     }
     return;
   }

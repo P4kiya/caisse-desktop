@@ -27,6 +27,8 @@ let expandedOrderId = null;
 let editingLineIndex = null;
 let draftLines = [];
 let lastOrders = [];
+const printedOrderIds = new Set();
+const duplicatedOrderIds = new Set();
 
 const priceInput = document.getElementById('price');
 const quantityInput = document.getElementById('quantity');
@@ -1006,6 +1008,12 @@ async function printSaleReceipt(order, { quiet = false, duplicate = false } = {}
       isDuplicate: duplicate,
       deviceName: window.caissePrint.deviceName || undefined,
     });
+    if (duplicate) {
+      duplicatedOrderIds.add(order.id);
+    } else {
+      printedOrderIds.add(order.id);
+    }
+    renderList(lastOrders);
     if (!quiet) {
       showToast({
         title: 'Impression',
@@ -1078,6 +1086,13 @@ function renderList(orders) {
           <button type="button" class="btn-entry btn-delete" data-action="delete">Supprimer</button>`
       : '';
 
+    const alreadyPrinted = printedOrderIds.has(order.id);
+    const alreadyDuplicated = duplicatedOrderIds.has(order.id);
+    const printLabel = alreadyPrinted ? 'Imprimé' : 'Imprimer';
+    const duplicateLabel = alreadyDuplicated ? 'Dupliqué' : 'Dupliquer';
+    const printDisabledAttr = alreadyPrinted ? 'disabled' : '';
+    const duplicateDisabledAttr = alreadyDuplicated ? 'disabled' : '';
+
     li.innerHTML = `
       <div class="entry-summary" data-action="toggle" role="button" tabindex="0" aria-expanded="${isExpanded}">
         <div class="summary-main">
@@ -1086,8 +1101,8 @@ function renderList(orders) {
         </div>
         <div class="summary-end">
           <span class="summary-total">${formatMoney(total)}</span>
-          <button type="button" class="btn-entry btn-print summary-print" data-action="print">Imprimer</button>
-          <button type="button" class="btn-entry btn-print summary-print" data-action="duplicate">Dupliquer</button>
+          <button type="button" class="btn-entry btn-print summary-print" data-action="print" ${printDisabledAttr}>${printLabel}</button>
+          <button type="button" class="btn-entry btn-print summary-print" data-action="duplicate" ${duplicateDisabledAttr}>${duplicateLabel}</button>
           <span class="summary-chevron" aria-hidden="true">▼</span>
         </div>
       </div>
